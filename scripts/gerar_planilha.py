@@ -336,9 +336,15 @@ pn["A1"].alignment = Alignment(horizontal="left", vertical="center", indent=1)
 pn.row_dimensions[1].height = 34
 
 pn.merge_cells("A2:H2")
+def _data_txt(ref):
+    # sem TEXT(): os codigos de formato mudam por idioma (aaaa no Excel em portugues)
+    return f'RIGHT("0"&DAY({ref}),2)&"/"&RIGHT("0"&MONTH({ref}),2)&"/"&YEAR({ref})'
+
+
+_ult = f"MAX(Historico!$A$2:$A${LIM})"
 pn["A2"] = (
-    f'="Dados do robô até: "&IF(MAX(Historico!$A$2:$A${LIM})=0,"nenhum e-mail processado ainda",'
-    f'TEXT(MAX(Historico!$A$2:$A${LIM}),"dd/mm/yyyy"))&"   |   Hoje: "&TEXT(TODAY(),"dd/mm/yyyy")'
+    f'="Dados do robô até: "&IF({_ult}=0,"nenhum e-mail processado ainda",{_data_txt(_ult)})'
+    f'&"   |   Hoje: "&{_data_txt("TODAY()")}'
 )
 pn["A2"].font = Font(italic=True, color=CINZA)
 pn["A2"].alignment = Alignment(indent=1)
