@@ -371,7 +371,7 @@ End Function
 
 ' ---- Principal ---------------------------------------------------------------
 Sub Main()
-  Dim ol, ns, pasta, itens, msg, proc, tmp, seq, nOk, nFalha, nPulados, filtro, corte, res
+  Dim ol, ns, caixa, itens, msg, proc, tmp, seq, nOk, nFalha, nPulados, filtro, corte, res
 
   If Not fso.FolderExists(PASTA) Then fso.CreateFolder PASTA
   tmp = PASTA & "\temp"
@@ -401,9 +401,9 @@ Sub Main()
 
   Set ol = CreateObject("Outlook.Application")
   Set ns = ol.GetNamespace("MAPI")
-  Set pasta = ns.GetDefaultFolder(6)
+  Set caixa = ns.GetDefaultFolder(6)
   filtro = "@SQL=" & Chr(34) & "urn:schemas:httpmail:subject" & Chr(34) & " like '%" & ASSUNTO & "%'"
-  Set itens = pasta.Items.Restrict(filtro)
+  Set itens = caixa.Items.Restrict(filtro)
   itens.Sort "[ReceivedTime]", False
   Set proc = CarregarProcessados()
   corte = Date - DIAS_RETROATIVOS
