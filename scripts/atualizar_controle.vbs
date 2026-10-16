@@ -14,15 +14,17 @@
 Option Explicit
 
 ' ===== CONFIGURACAO =====
-Const PASTA = "C:\Controle"
-Const PLANILHA = "C:\Controle\controle_equipamentos.xlsx"
+' (a pasta e a mesma onde este arquivo esta; a planilha deve estar ao lado dele)
 Const ASSUNTO = "GLA"
 Const DIAS_RETROATIVOS = 45
 Const DRY_RUN = True
 ' ========================
 
-Dim fso, xl, wb, logPath
+Dim fso, xl, wb, logPath, PASTA, PLANILHA
 Set fso = CreateObject("Scripting.FileSystemObject")
+' A pasta e a planilha ficam onde o proprio .vbs esta (nao precisa editar caminho)
+PASTA = fso.GetParentFolderName(WScript.ScriptFullName)
+PLANILHA = PASTA & "\controle_equipamentos.xlsx"
 logPath = PASTA & "\robo.log"
 
 Sub Registrar(msg)
