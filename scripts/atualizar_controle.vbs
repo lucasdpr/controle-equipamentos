@@ -31,10 +31,16 @@ PLANILHA = PASTA & "\controle_equipamentos.xlsx"
 logPath = PASTA & "\robo.log"
 
 Sub Registrar(msg)
-  Dim f
+  Dim f, i, c, t
+  t = ""
+  For i = 1 To Len(msg)
+    c = Mid(msg, i, 1)
+    If AscW(c) > 127 Or AscW(c) < 0 Then c = "?"
+    t = t & c
+  Next
   On Error Resume Next
   Set f = fso.OpenTextFile(logPath, 8, True)
-  f.WriteLine Now & " | " & msg
+  f.WriteLine Now & " | " & t
   f.Close
   On Error GoTo 0
 End Sub
@@ -83,7 +89,6 @@ End Sub
 ' ---- Producao -------------------------------------------------------------
 Sub GravarProducao(dt, mcc4real, mcc4prog, mcc2real, mcc3real, arquivo)
   Dim ws, r, ult, achou, k
-  Registrar "Producao " & dt & " MCC4 real=" & mcc4real
   If DRY_RUN Then Exit Sub
   Set ws = wb.Worksheets("Producao")
   k = CLng(dt)
@@ -236,7 +241,7 @@ End Sub
 ' ---- Leitura dos anexos -----------------------------------------------------
 ' Retorna True se leu sem problema de layout
 Function ProcessarVidaMolde(caminho, ByRef dataRel)
-  Dim b, ws, r, veio, molde, meta, acum, obs, ok
+  Dim b, ws, r, veio, molde, meta, acum, obs, ok, linha
   ProcessarVidaMolde = False
   Set b = xl.Workbooks.Open(caminho, 0, True)
   Set ws = AchaAba(b, "VIDA MOLDE")
@@ -252,6 +257,7 @@ Function ProcessarVidaMolde(caminho, ByRef dataRel)
   End If
   dataRel = CDate(ws.Cells(2, 9).Value)
   ok = True
+  linha = ""
   For r = 5 To 10
     veio = UCase(Txt(ws.Cells(r, 2).Value))
     molde = ws.Cells(r, 3).Value
@@ -262,16 +268,19 @@ Function ProcessarVidaMolde(caminho, ByRef dataRel)
       Alerta "Layout alterado", "VIDA MOLDE", "Linha " & r & " invalida (veio=" & veio & ", molde=" & Txt(molde) & ", acumulado=" & Txt(acum) & ")"
       ok = False
     Else
+      linha = linha & veio & "=molde " & molde & ", " & acum & "/" & meta & " | "
       AplicarVeio dataRel, veio, CLng(molde), CDbl(meta), CDbl(acum), obs
     End If
   Next
   b.Close False
+  Registrar "VIDA MOLDE de " & dataRel & ": " & linha
   ProcessarVidaMolde = ok
 End Function
 
 Function ProcessarCorteseq(caminho, nomeArq, refData)
-  Dim b, ws, r, dia, ano, mes, dt, re, m, real4, prog4, real2, real3
+  Dim b, ws, r, dia, ano, mes, dt, re, m, real4, prog4, real2, real3, nDias, dMin, dMax
   ProcessarCorteseq = False
+  nDias = 0
   ano = Year(refData)
   mes = Month(refData)
   Set re = CreateObject("VBScript.RegExp")
@@ -307,11 +316,15 @@ Function ProcessarCorteseq(caminho, nomeArq, refData)
           real3 = ""
           If IsNumeric(ws.Cells(r, 6).Value) And Txt(ws.Cells(r, 6).Value) <> "" Then real3 = CDbl(ws.Cells(r, 6).Value)
           GravarProducao dt, real4, prog4, real2, real3, nomeArq
+          nDias = nDias + 1
+          If nDias = 1 Or dt < dMin Then dMin = dt
+          If nDias = 1 Or dt > dMax Then dMax = dt
         End If
       End If
     End If
   Next
   b.Close False
+  If nDias > 0 Then Registrar "CORTESEQ " & nomeArq & ": " & nDias & " dias de producao MCC4 (de " & dMin & " a " & dMax & ")"
   ProcessarCorteseq = True
 End Function
 
@@ -340,11 +353,31 @@ Sub MarcarProcessado(id)
 End Sub
 
 ' ---- Processa um e-mail -----------------------------------------------------
-Function ProcessarEmail(msg, tmp, seq)
-  Dim i, att, nome, u, pVida, pCorte, nCorte, ok, dataRel, temVida, temCorte
+Function ChaveCorte(msg)
+  Dim i, nome, re, m
+  ChaveCorte = ""
+  Set re = CreateObject("VBScript.RegExp")
+  re.Pattern = "(\d{1,2})-(\d{4})"
+  For i = 1 To msg.Attachments.Count
+    nome = msg.Attachments.Item(i).FileName
+    If InStr(UCase(nome), "CORTESEQ") > 0 Then
+      If re.Test(nome) Then
+        Set m = re.Execute(nome)(0)
+        ChaveCorte = m.SubMatches(1) & "-" & Right("0" & m.SubMatches(0), 2)
+      Else
+        ChaveCorte = "sem-mes"
+      End If
+      Exit Function
+    End If
+  Next
+End Function
+
+Function ProcessarEmail(msg, tmp, seq, lerCorte)
+  Dim i, att, nome, u, pVida, pCorte, nCorte, ok, dataRel, temVida, temCorte, existeCorte
   ProcessarEmail = False
   temVida = False
   temCorte = False
+  existeCorte = False
   For i = 1 To msg.Attachments.Count
     Set att = msg.Attachments.Item(i)
     nome = att.FileName
@@ -354,23 +387,28 @@ Function ProcessarEmail(msg, tmp, seq)
         pVida = tmp & "\" & seq & "_vida_" & i & Right(u, Len(u) - InStrRev(u, ".") + 1)
         att.SaveAsFile pVida
         temVida = True
-      ElseIf InStr(u, "CORTESEQ") > 0 And Not temCorte Then
-        pCorte = tmp & "\" & seq & "_corte_" & i & Right(u, Len(u) - InStrRev(u, ".") + 1)
-        att.SaveAsFile pCorte
-        nCorte = nome
-        temCorte = True
+      ElseIf InStr(u, "CORTESEQ") > 0 And Not existeCorte Then
+        existeCorte = True
+        If lerCorte Then
+          pCorte = tmp & "\" & seq & "_corte_" & i & Right(u, Len(u) - InStrRev(u, ".") + 1)
+          att.SaveAsFile pCorte
+          nCorte = nome
+          temCorte = True
+        Else
+          Registrar "CORTESEQ ignorado: existe e-mail mais novo do mesmo mes (ja traz tudo)"
+        End If
       End If
     End If
   Next
-  If Not temVida And Not temCorte Then Exit Function
+  If Not temVida And Not existeCorte Then Exit Function
   ok = True
   dataRel = CDate(msg.ReceivedTime)
-  ' Vida molde primeiro para saber a data do relatorio; producao depois
-  If temVida Then
-    If Not ProcessarVidaMolde(pVida, dataRel) Then ok = False
-  End If
+  ' Producao primeiro (o alerta "veio nao andou" usa a producao do dia anterior)
   If temCorte Then
     If Not ProcessarCorteseq(pCorte, nCorte, dataRel) Then ok = False
+  End If
+  If temVida Then
+    If Not ProcessarVidaMolde(pVida, dataRel) Then ok = False
   End If
   If temVida Then fso.DeleteFile pVida, True
   If temCorte Then fso.DeleteFile pCorte, True
@@ -379,7 +417,7 @@ End Function
 
 ' ---- Principal ---------------------------------------------------------------
 Sub Main()
-  Dim ol, ns, caixa, itens, msg, proc, tmp, seq, nOk, nFalha, nPulados, filtro, corte, res, falhou, lista, n, k
+  Dim ol, ns, caixa, itens, msg, proc, tmp, seq, nOk, nFalha, nPulados, filtro, corte, res, falhou, lista, n, k, ultimo, chave, lerCorte
 
   If Not fso.FolderExists(PASTA) Then fso.CreateFolder PASTA
   tmp = PASTA & "\temp"
@@ -465,6 +503,15 @@ Sub Main()
       lista.Add n, msg
     End If
   Next
+  ' Cada CORTESEQ traz o mes inteiro ate o dia: so o mais novo de cada mes precisa ser lido
+  Set ultimo = CreateObject("Scripting.Dictionary")
+  For k = 1 To n
+    Set msg = lista(k)
+    chave = ChaveCorte(msg)
+    If chave <> "" Then
+      If Not ultimo.Exists(chave) Then ultimo.Add chave, k
+    End If
+  Next
   Registrar "E-mails com GLA no assunto nos ultimos " & DIAS_RETROATIVOS & " dias: " & n
 
   ' Processa do mais antigo para o mais novo
@@ -474,10 +521,15 @@ Sub Main()
       nPulados = nPulados + 1
     Else
       seq = seq + 1
+      lerCorte = True
+      chave = ChaveCorte(msg)
+      If chave <> "" Then
+        If ultimo.Exists(chave) Then lerCorte = (ultimo(chave) = k)
+      End If
       Registrar "E-mail " & msg.ReceivedTime & " | " & msg.Subject
       res = False
       On Error Resume Next
-      res = ProcessarEmail(msg, tmp, seq)
+      res = ProcessarEmail(msg, tmp, seq, lerCorte)
       If Err.Number <> 0 Then
         Registrar "ERRO no e-mail: " & Err.Description
         Err.Clear
