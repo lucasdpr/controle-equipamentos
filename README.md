@@ -31,9 +31,9 @@ Planilha `controle_equipamentos.xlsx` (Excel) atualizada por um robô `.vbs` que
 ## Instalação no PC (Windows, Outlook clássico, Excel desktop)
 
 1. Copie `controle_equipamentos.xlsx` e `scripts/atualizar_controle.vbs` para a mesma pasta (qualquer lugar, ex.: Área de Trabalho\Controle). O robô usa a pasta onde o `.vbs` está.
-3. Feche a planilha. Rode o `.vbs` com `DRY_RUN = True` (padrão): ele não grava nada e escreve `C:\Controle\robo.log`.
-4. Confira o log. Se estiver certo, troque para `DRY_RUN = False` e rode de novo.
-5. Agende no Agendador de Tarefas do Windows (uma vez por dia útil, marcando "executar assim que possível após início perdido").
+2. Feche a planilha. Rode o `.vbs` com `DRY_RUN = True` (padrão): ele não grava nada e escreve `robo.log` na mesma pasta.
+3. Confira o log. Se estiver certo, troque para `DRY_RUN = False` e rode de novo.
+4. Agende no Agendador de Tarefas do Windows (uma vez por dia útil, marcando "executar assim que possível após início perdido").
 
 ## Não testado
 
