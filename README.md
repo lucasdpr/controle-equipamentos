@@ -46,4 +46,4 @@ python3 scripts/gerar_planilha.py
 ```
 
 ---
-Autor: Lucas Faria | Matrícula cbk3574 | https://github.com/lucasdpr/controle-equipamentos
+Autor: Lucas Gabriel de Paula Rafael | Matrícula cbk3574 | https://github.com/lucasdpr/controle-equipamentos

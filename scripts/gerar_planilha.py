@@ -298,7 +298,7 @@ textos = [
 ]
 for i, t in enumerate(textos, start=6):
     rg[f"A{i}"] = t
-rg["A14"] = "Autor: Lucas Faria  |  Matrícula cbk3574  |  github.com/lucasdpr/controle-equipamentos"
+rg["A14"] = "Autor: Lucas Gabriel de Paula Rafael  |  Matrícula cbk3574  |  github.com/lucasdpr/controle-equipamentos"
 rg["A14"].font = Font(italic=True, color=CINZA)
 rg.sheet_view.showGridLines = False
 larguras(rg, {"A": 140, "B": 12})
@@ -343,7 +343,7 @@ pn["A2"] = (
 pn["A2"].font = Font(italic=True, color=CINZA)
 pn["A2"].alignment = Alignment(indent=1)
 pn.merge_cells("A3:H3")
-pn["A3"] = "Lucas Faria  |  Matrícula cbk3574  |  github.com/lucasdpr/controle-equipamentos"
+pn["A3"] = "Lucas Gabriel de Paula Rafael  |  Matrícula cbk3574  |  github.com/lucasdpr/controle-equipamentos"
 pn["A3"].font = Font(size=8, italic=True, color="808080")
 pn["A3"].alignment = Alignment(indent=1)
 

@@ -1,6 +1,6 @@
 Attribute VB_Name = "Robo"
 ' Robo.bas - roda DENTRO do Excel (macro). Nao usa arquivo .vbs.
-' Autor: Lucas Faria | Matricula cbk3574 | github.com/lucasdpr/controle-equipamentos
+' Autor: Lucas Gabriel de Paula Rafael | Matricula cbk3574 | github.com/lucasdpr/controle-equipamentos
 ' Le os e-mails "Relatorios GLA" do Outlook CLASSICO, extrai os anexos
 ' "VIDA MOLDE" e "CORTESEQ" e atualiza esta planilha.
 '
@@ -18,7 +18,7 @@ Option Explicit
 Private Const ASSUNTO As String = "GLA"
 Private Const DIAS_RETROATIVOS As Long = 45
 Private Const DRY_RUN As Boolean = True
-Private Const MARCA As String = "Lucas Faria | Matricula cbk3574 | github.com/lucasdpr/controle-equipamentos"
+Private Const MARCA As String = "Lucas Gabriel de Paula Rafael | Matricula cbk3574 | github.com/lucasdpr/controle-equipamentos"
 
 Private wb As Workbook
 

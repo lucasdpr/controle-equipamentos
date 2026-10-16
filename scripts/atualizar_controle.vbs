@@ -1,5 +1,5 @@
 ' atualizar_controle.vbs
-' Autor: Lucas Faria | Matricula cbk3574 | github.com/lucasdpr/controle-equipamentos
+' Autor: Lucas Gabriel de Paula Rafael | Matricula cbk3574 | github.com/lucasdpr/controle-equipamentos
 ' Le os e-mails "Relatorios GLA" do Outlook CLASSICO, extrai os anexos
 ' "VIDA MOLDE" e "CORTESEQ" e atualiza a planilha de controle.
 '
@@ -19,7 +19,7 @@ Option Explicit
 Const ASSUNTO = "GLA"
 Const DIAS_RETROATIVOS = 45
 Const DRY_RUN = True
-Const MARCA = "Lucas Faria | Matricula cbk3574 | github.com/lucasdpr/controle-equipamentos"
+Const MARCA = "Lucas Gabriel de Paula Rafael | Matricula cbk3574 | github.com/lucasdpr/controle-equipamentos"
 ' ========================
 
 Dim fso, xl, wb, logPath, PASTA, PLANILHA
