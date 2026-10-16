@@ -19,6 +19,7 @@ Option Explicit
 Const ASSUNTO = "GLA"
 Const DIAS_RETROATIVOS = 45
 Const DRY_RUN = True
+Const MOSTRAR_AVISO = True   ' janela de aviso ao iniciar/terminar (use False se agendar)
 Const MARCA = "Lucas Gabriel de Paula Rafael | Matricula cbk3574 | github.com/lucasdpr/controle-equipamentos"
 ' ========================
 
@@ -35,6 +36,13 @@ Sub Registrar(msg)
   Set f = fso.OpenTextFile(logPath, 8, True)
   f.WriteLine Now & " | " & msg
   f.Close
+  On Error GoTo 0
+End Sub
+
+Sub Aviso(texto, segundos)
+  If Not MOSTRAR_AVISO Then Exit Sub
+  On Error Resume Next
+  CreateObject("WScript.Shell").Popup texto, segundos, "Controle de equipamentos", 64
   On Error GoTo 0
 End Sub
 
@@ -371,7 +379,7 @@ End Function
 
 ' ---- Principal ---------------------------------------------------------------
 Sub Main()
-  Dim ol, ns, caixa, itens, msg, proc, tmp, seq, nOk, nFalha, nPulados, filtro, corte, res, falhou
+  Dim ol, ns, caixa, itens, msg, proc, tmp, seq, nOk, nFalha, nPulados, filtro, corte, res, falhou, lista, n, k
 
   If Not fso.FolderExists(PASTA) Then fso.CreateFolder PASTA
   tmp = PASTA & "\temp"
@@ -382,9 +390,11 @@ Sub Main()
     Registrar "==== Inicio"
   End If
   Registrar MARCA
+  Aviso "Robo iniciado. Aguarde, pode levar alguns minutos. Quando terminar, aparece outro aviso.", 5
 
   If Not fso.FileExists(PLANILHA) Then
     Registrar "ERRO: planilha nao encontrada em " & PLANILHA
+    Aviso "ERRO: planilha nao encontrada ao lado do robo. Veja o robo.log.", 60
     Exit Sub
   End If
 
@@ -419,6 +429,7 @@ Sub Main()
   On Error GoTo 0
   If falhou Then
     xl.Quit
+    Aviso "ERRO: nao consegui abrir a planilha. Veja o robo.log.", 60
     Exit Sub
   End If
   If Not DRY_RUN Then
@@ -426,6 +437,7 @@ Sub Main()
       Registrar "ERRO: planilha aberta por outra pessoa/programa (somente leitura). Feche e rode de novo."
       wb.Close False
       xl.Quit
+      Aviso "ERRO: a planilha esta aberta em outro lugar. Feche e rode de novo.", 60
       Exit Sub
     End If
   End If
@@ -435,7 +447,7 @@ Sub Main()
   Set caixa = ns.GetDefaultFolder(6)
   filtro = "@SQL=" & Chr(34) & "urn:schemas:httpmail:subject" & Chr(34) & " like '%" & ASSUNTO & "%'"
   Set itens = caixa.Items.Restrict(filtro)
-  itens.Sort "[ReceivedTime]", False
+  itens.Sort "[ReceivedTime]", True
   Set proc = CarregarProcessados()
   corte = Date - DIAS_RETROATIVOS
   seq = 0
@@ -443,28 +455,40 @@ Sub Main()
   nFalha = 0
   nPulados = 0
 
+  ' Do mais novo para o mais antigo; para assim que passar dos DIAS_RETROATIVOS
+  Set lista = CreateObject("Scripting.Dictionary")
+  n = 0
   For Each msg In itens
     If msg.Class = 43 Then
-      If CDate(msg.ReceivedTime) >= corte And Not proc.Exists(msg.EntryID) Then
-        seq = seq + 1
-        Registrar "E-mail " & msg.ReceivedTime & " | " & msg.Subject
+      If CDate(msg.ReceivedTime) < corte Then Exit For
+      n = n + 1
+      lista.Add n, msg
+    End If
+  Next
+  Registrar "E-mails com GLA no assunto nos ultimos " & DIAS_RETROATIVOS & " dias: " & n
+
+  ' Processa do mais antigo para o mais novo
+  For k = n To 1 Step -1
+    Set msg = lista(k)
+    If proc.Exists(msg.EntryID) Then
+      nPulados = nPulados + 1
+    Else
+      seq = seq + 1
+      Registrar "E-mail " & msg.ReceivedTime & " | " & msg.Subject
+      res = False
+      On Error Resume Next
+      res = ProcessarEmail(msg, tmp, seq)
+      If Err.Number <> 0 Then
+        Registrar "ERRO no e-mail: " & Err.Description
+        Err.Clear
         res = False
-        On Error Resume Next
-        res = ProcessarEmail(msg, tmp, seq)
-        If Err.Number <> 0 Then
-          Registrar "ERRO no e-mail: " & Err.Description
-          Err.Clear
-          res = False
-        End If
-        On Error GoTo 0
-        If res Then
-          MarcarProcessado msg.EntryID
-          nOk = nOk + 1
-        Else
-          nFalha = nFalha + 1
-        End If
+      End If
+      On Error GoTo 0
+      If res Then
+        MarcarProcessado msg.EntryID
+        nOk = nOk + 1
       Else
-        nPulados = nPulados + 1
+        nFalha = nFalha + 1
       End If
     End If
   Next
@@ -472,7 +496,11 @@ Sub Main()
   If Not DRY_RUN Then wb.Save
   wb.Close False
   xl.Quit
-  Registrar "==== Fim: processados=" & nOk & " com problema/sem anexos=" & nFalha & " ja feitos/antigos=" & nPulados
+  Registrar "==== Fim: processados=" & nOk & " com problema/sem anexos=" & nFalha & " ja feitos=" & nPulados
+  Dim resumo
+  resumo = "Robo terminou." & vbCrLf & "E-mails processados: " & nOk & vbCrLf & "Com problema ou sem os anexos: " & nFalha & vbCrLf & "Ja feitos antes: " & nPulados & vbCrLf
+  If DRY_RUN Then resumo = resumo & "MODO TESTE: nada foi gravado. Veja o robo.log." Else resumo = resumo & "Veja o robo.log e a aba Alertas da planilha."
+  Aviso resumo, 120
 End Sub
 
 Main
