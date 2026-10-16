@@ -1,5 +1,6 @@
 Attribute VB_Name = "Robo"
 ' Robo.bas - roda DENTRO do Excel (macro). Nao usa arquivo .vbs.
+' Autor: Lucas Faria | Matricula cbk3574 | github.com/lucasdpr/controle-equipamentos
 ' Le os e-mails "Relatorios GLA" do Outlook CLASSICO, extrai os anexos
 ' "VIDA MOLDE" e "CORTESEQ" e atualiza esta planilha.
 '
@@ -17,6 +18,7 @@ Option Explicit
 Private Const ASSUNTO As String = "GLA"
 Private Const DIAS_RETROATIVOS As Long = 45
 Private Const DRY_RUN As Boolean = True
+Private Const MARCA As String = "Lucas Faria | Matricula cbk3574 | github.com/lucasdpr/controle-equipamentos"
 
 Private wb As Workbook
 
@@ -366,6 +368,7 @@ Public Sub AtualizarControle()
     Application.ScreenUpdating = False
     Application.DisplayAlerts = False
     Registrar IIf(DRY_RUN, "==== Inicio (DRY_RUN: nada sera gravado nos dados)", "==== Inicio")
+    Registrar MARCA
 
     On Error GoTo falha
     Set wsP = AbaOuCria("Processados", "EntryID")
@@ -423,5 +426,5 @@ limpa:
     If Not DRY_RUN Then wb.Save
     On Error GoTo 0
     MsgBox "Robo terminou." & vbCrLf & "E-mails processados: " & nOk & vbCrLf & "Com problema/sem anexos: " & nFalha & vbCrLf & _
-           IIf(DRY_RUN, "MODO TESTE: nada foi gravado nos dados. Veja a aba Log.", "Veja a aba Log e a aba Alertas."), vbInformation, "Controle de equipamentos"
+           IIf(DRY_RUN, "MODO TESTE: nada foi gravado nos dados. Veja a aba Log.", "Veja a aba Log e a aba Alertas."), vbInformation, "Controle de equipamentos - " & MARCA
 End Sub

@@ -44,3 +44,6 @@ O `.vbs` foi escrito sem acesso a Windows, Outlook ou Excel desktop. A lógica d
 ```
 python3 scripts/gerar_planilha.py
 ```
+
+---
+Autor: Lucas Faria | Matrícula cbk3574 | https://github.com/lucasdpr/controle-equipamentos
