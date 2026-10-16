@@ -197,7 +197,6 @@ End Sub
 
 Sub RegistrarTroca(dt, veio, moldeSaiu, vidaProg, acumSaida, moldeEntrou, obs)
   Dim ws, r, ult, conferir, re, m
-  Registrar "TROCA veio " & veio & ": saiu " & moldeSaiu & " com " & acumSaida & ", entrou " & moldeEntrou
   conferir = ""
   Set re = CreateObject("VBScript.RegExp")
   re.Pattern = "MOLDE\s+(?:N\S?\s*)?(\d+)\s+COM\s+(\d+)\s+COR"
@@ -205,14 +204,13 @@ Sub RegistrarTroca(dt, veio, moldeSaiu, vidaProg, acumSaida, moldeEntrou, obs)
   Set m = Nothing
   If re.Test(obs) Then Set m = re.Execute(obs)(0)
   If m Is Nothing Then
-    conferir = "Observacao nao informa molde/corridas de saida"
+    conferir = "Observacao nao informa molde/corridas de saida (usado o ultimo acumulado " & acumSaida & ")"
+  ElseIf CLng(m.SubMatches(0)) <> CLng(moldeSaiu) Then
+    conferir = "Observacao cita molde " & m.SubMatches(0) & ", planilha indica " & moldeSaiu & " (usado o ultimo acumulado " & acumSaida & ")"
   Else
-    If CLng(m.SubMatches(0)) <> CLng(moldeSaiu) Then conferir = "Observacao cita molde " & m.SubMatches(0) & ", planilha indica " & moldeSaiu
-    If CLng(m.SubMatches(1)) <> CLng(acumSaida) Then
-      If conferir <> "" Then conferir = conferir & "; "
-      conferir = conferir & "Observacao diz " & m.SubMatches(1) & " corridas, ultimo acumulado " & acumSaida
-    End If
+    acumSaida = CDbl(m.SubMatches(1))   ' valor oficial informado no relatorio
   End If
+  Registrar "TROCA veio " & veio & ": saiu " & moldeSaiu & " com " & acumSaida & ", entrou " & moldeEntrou
   If DRY_RUN Then Exit Sub
   Set ws = wb.Worksheets("Trocas")
   ult = UltimaLinha(ws, 1)
@@ -289,12 +287,11 @@ Function ProcessarVidaMolde(caminho, ByRef dataRel)
     b.Close False
     Exit Function
   End If
-  If UCase(Txt(ws.Cells(3, 2).Value)) <> "VEIOS" Or InStr(UCase(Txt(ws.Cells(4, 4).Value)), "PROGR") = 0 Or UCase(Txt(ws.Cells(4, 5).Value)) <> "REAL" Or Not IsDate(ws.Cells(2, 9).Value) Then
-    Alerta "Layout alterado", "VIDA MOLDE", "Cabecalhos (B3, D4, E4) ou data (I2) fora do esperado em " & fso.GetFileName(caminho)
+  If UCase(Txt(ws.Cells(3, 2).Value)) <> "VEIOS" Or InStr(UCase(Txt(ws.Cells(4, 4).Value)), "PROGR") = 0 Or UCase(Txt(ws.Cells(4, 5).Value)) <> "REAL" Then
+    Alerta "Layout alterado", "VIDA MOLDE", "Cabecalhos (B3, D4, E4) fora do esperado em " & fso.GetFileName(caminho)
     b.Close False
     Exit Function
   End If
-  dataRel = CDate(ws.Cells(2, 9).Value)
   ok = True
   linha = ""
   For r = 5 To 10
@@ -306,6 +303,8 @@ Function ProcessarVidaMolde(caminho, ByRef dataRel)
     If Len(veio) <> 1 Or InStr("CDEFGH", veio) = 0 Or Not IsNumeric(molde) Or Not IsNumeric(meta) Or Not IsNumeric(acum) Or Txt(molde) = "" Or Txt(acum) = "" Then
       Alerta "Layout alterado", "VIDA MOLDE", "Linha " & r & " invalida (veio=" & veio & ", molde=" & Txt(molde) & ", acumulado=" & Txt(acum) & ")"
       ok = False
+    ElseIf CDbl(molde) = 0 Then
+      Registrar "Veio " & veio & " sem molde (numero 0): ignorado neste e-mail"
     Else
       linha = linha & veio & "=molde " & molde & ", " & acum & "/" & meta & " | "
       AplicarVeio dataRel, veio, CLng(molde), CDbl(meta), CDbl(acum), obs
@@ -441,7 +440,7 @@ Function ProcessarEmail(msg, tmp, seq, lerCorte)
   Next
   If Not temVida And Not existeCorte Then Exit Function
   ok = True
-  dataRel = CDate(msg.ReceivedTime)
+  dataRel = CDate(Int(CDate(msg.ReceivedTime)))   ' data do e-mail (a data dentro do anexo e NOW, nao serve)
   ' Producao primeiro (o alerta "veio nao andou" usa a producao do dia anterior)
   If temCorte Then
     If Not ProcessarCorteseq(pCorte, nCorte, dataRel) Then ok = False
@@ -455,7 +454,7 @@ Function ProcessarEmail(msg, tmp, seq, lerCorte)
 End Function
 
 ' ---- Principal ---------------------------------------------------------------
-Sub Main()
+Sub Executar()
   Dim ol, ns, caixa, itens, msg, proc, tmp, seq, nOk, nFalha, nPulados, filtro, corte, res, falhou, lista, n, k, ultimo, chave, lerCorte
 
   If Not fso.FolderExists(PASTA) Then fso.CreateFolder PASTA
@@ -592,6 +591,23 @@ Sub Main()
   resumo = "Robo terminou." & vbCrLf & "E-mails processados: " & nOk & vbCrLf & "Com problema ou sem os anexos: " & nFalha & vbCrLf & "Ja feitos antes: " & nPulados & vbCrLf
   If DRY_RUN Then resumo = resumo & "MODO TESTE: nada foi gravado. Veja o robo.log." Else resumo = resumo & "Veja o robo.log e a aba Alertas da planilha."
   Aviso resumo, 120
+End Sub
+
+Sub Main()
+  Dim lockPath
+  lockPath = PASTA & "\robo.lock"
+  If fso.FileExists(lockPath) Then
+    If DateDiff("n", fso.GetFile(lockPath).DateLastModified, Now) < 30 Then
+      Registrar "Ja existe outra execucao em andamento (robo.lock). Saindo."
+      Aviso "O robo ja esta rodando. Espere o aviso Robo terminou antes de abrir de novo.", 30
+      Exit Sub
+    End If
+  End If
+  fso.CreateTextFile(lockPath, True).Close
+  Executar
+  On Error Resume Next
+  fso.DeleteFile lockPath, True
+  On Error GoTo 0
 End Sub
 
 Main
