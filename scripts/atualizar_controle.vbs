@@ -371,7 +371,7 @@ End Function
 
 ' ---- Principal ---------------------------------------------------------------
 Sub Main()
-  Dim ol, ns, caixa, itens, msg, proc, tmp, seq, nOk, nFalha, nPulados, filtro, corte, res
+  Dim ol, ns, caixa, itens, msg, proc, tmp, seq, nOk, nFalha, nPulados, filtro, corte, res, falhou
 
   If Not fso.FolderExists(PASTA) Then fso.CreateFolder PASTA
   tmp = PASTA & "\temp"
@@ -391,12 +391,43 @@ Sub Main()
   Set xl = CreateObject("Excel.Application")
   xl.Visible = False
   xl.DisplayAlerts = False
-  Set wb = xl.Workbooks.Open(PLANILHA)
-  If wb.ReadOnly Then
-    Registrar "ERRO: planilha aberta por outra pessoa/programa (somente leitura). Feche e rode de novo."
-    wb.Close False
+  falhou = False
+  On Error Resume Next
+  If DRY_RUN Then
+    Set wb = xl.Workbooks.Open(PLANILHA, 0, True)
+  Else
+    Set wb = xl.Workbooks.Open(PLANILHA)
+  End If
+  If Err.Number <> 0 Then
+    Registrar "AVISO: nao abriu a planilha (" & Err.Number & "): " & Err.Description
+    Err.Clear
+    If DRY_RUN Then
+      fso.CopyFile PLANILHA, tmp & "\copia_teste.xlsx", True
+      Set wb = xl.Workbooks.Open(tmp & "\copia_teste.xlsx", 0, True)
+      If Err.Number <> 0 Then
+        Registrar "ERRO: nem a copia da planilha abriu (" & Err.Number & "): " & Err.Description
+        Err.Clear
+        falhou = True
+      Else
+        Registrar "Teste usando uma COPIA da planilha (a original esta bloqueada)"
+      End If
+    Else
+      Registrar "ERRO: feche a planilha em todo lugar e finalize o EXCEL oculto no Gerenciador de Tarefas. Depois rode de novo."
+      falhou = True
+    End If
+  End If
+  On Error GoTo 0
+  If falhou Then
     xl.Quit
     Exit Sub
+  End If
+  If Not DRY_RUN Then
+    If wb.ReadOnly Then
+      Registrar "ERRO: planilha aberta por outra pessoa/programa (somente leitura). Feche e rode de novo."
+      wb.Close False
+      xl.Quit
+      Exit Sub
+    End If
   End If
 
   Set ol = CreateObject("Outlook.Application")
