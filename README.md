@@ -10,9 +10,9 @@ Planilha `controle_equipamentos.xlsx` (Excel) atualizada por um robô `.vbs` que
 ## Abas da planilha
 
 - **Painel** (abre nele): indicadores (além da meta / atenção / OK / alertas), barras de progresso e 3 gráficos (% da vida, corridas G e H, toneladas do MCC4).
-- **Resumo**: meta, acumulado, falta, %, situação. Itens: Molde G, Molde H, Oscilador, Bender, Bow, Straightener R1/R2, Horizontal. Células amarelas = você digita.
+- **Resumo**: meta, acumulado, falta, %, situação. Itens: Molde G, Molde H, Oscilador, Bender, Bow, Straightener R1/R2, Horizontal. Células amarelas = você digita (Desde e Acumulado inicial dos equipamentos; "Desde = 01/08/2026" é provisório).
 - **Moldes**: todos os veios (C a H) com molde atual, acumulado, %, quantidade de trocas, corridas médias na saída, última troca e dias parados.
-- **Movimentos** (manual): entrada e saída de oscilador e componentes.
+- **TrocasEquip** (manual): registro da saída de oscilador e componentes (quando trocar um, registre aqui e digite a nova data em "Desde" no Resumo).
 - **Paradas** (manual): início, fim, motivo.
 - **Historico** (robô): um registro por data e veio (todos os veios C a H).
 - **Producao** (robô): toneladas reais por MCC por dia.
@@ -23,8 +23,8 @@ Planilha `controle_equipamentos.xlsx` (Excel) atualizada por um robô `.vbs` que
 ## Regras
 
 - Molde: corridas, acumulado do último dia importado. Meta fixa por veio (G e H = 1100).
-- Oscilador: dias (saída − entrada; entrada conta, saída não; em aberto conta até hoje). Meta 730.
-- Componentes: toneladas reais do MCC4 nos dias entre entrada e saída.
+- Oscilador: dias corridos desde a data em "Desde" (Resumo) + Acumulado inicial. Meta 730.
+- Componentes: toneladas reais do MCC4 desde a data em "Desde" (Resumo) + Acumulado inicial. Tudo atualiza sozinho quando o robô importa a produção do dia.
 - Falta = meta − acumulado. % = acumulado ÷ meta. Sem previsão.
 - Reenvio do e-mail do mesmo dia substitui o registro (não soma). Dia perdido se corrige no próximo e-mail.
 
