@@ -23,12 +23,14 @@ Const MOSTRAR_AVISO = True   ' janela de aviso ao iniciar/terminar (use False se
 Const MARCA = "Lucas Gabriel de Paula Rafael | Matricula cbk3574 | github.com/lucasdpr/controle-equipamentos"
 ' ========================
 
-Dim fso, xl, wb, logPath, PASTA, PLANILHA
+Dim fso, xl, wb, logPath, PASTA, PLANILHA, memoVeio, memoProd
 Set fso = CreateObject("Scripting.FileSystemObject")
 ' A pasta e a planilha ficam onde o proprio .vbs esta (nao precisa editar caminho)
 PASTA = fso.GetParentFolderName(WScript.ScriptFullName)
 PLANILHA = PASTA & "\controle_equipamentos.xlsx"
 logPath = PASTA & "\robo.log"
+Set memoVeio = CreateObject("Scripting.Dictionary")   ' no teste (DRY_RUN) guarda o ultimo dia de cada veio
+Set memoProd = CreateObject("Scripting.Dictionary")   ' no teste guarda a producao lida
 
 Sub Registrar(msg)
   Dim f, i, c, t
@@ -89,7 +91,10 @@ End Sub
 ' ---- Producao -------------------------------------------------------------
 Sub GravarProducao(dt, mcc4real, mcc4prog, mcc2real, mcc3real, arquivo)
   Dim ws, r, ult, achou, k
-  If DRY_RUN Then Exit Sub
+  If DRY_RUN Then
+    memoProd(CLng(dt)) = Array(mcc4real, mcc4prog, mcc2real, mcc3real)
+    Exit Sub
+  End If
   Set ws = wb.Worksheets("Producao")
   k = CLng(dt)
   ult = UltimaLinha(ws, 1)
@@ -114,8 +119,20 @@ End Sub
 
 ' Toneladas reais da MCC do veio na data; -1 se nao houver registro
 Function ProducaoDoVeio(veio, dt)
-  Dim ws, r, ult, col
+  Dim ws, r, ult, col, v, x
   ProducaoDoVeio = -1
+  If DRY_RUN Then
+    If memoProd.Exists(CLng(dt)) Then
+      v = memoProd(CLng(dt))
+      Select Case veio
+        Case "C", "D": x = v(2)
+        Case "E", "F": x = v(3)
+        Case Else: x = v(0)
+      End Select
+      If Txt(x) <> "" Then ProducaoDoVeio = CDbl(x)
+    End If
+    Exit Function
+  End If
   Select Case veio
     Case "C", "D": col = 4
     Case "E", "F": col = 5
@@ -217,15 +234,36 @@ Sub RegistrarTroca(dt, veio, moldeSaiu, vidaProg, acumSaida, moldeEntrou, obs)
   If conferir <> "" Then Alerta "Troca para conferir", "Veio " & veio, conferir
 End Sub
 
+Function AnteriorDoVeio(veio, dt, ByRef pMolde, ByRef pMeta, ByRef pAcum, ByRef pData)
+  Dim ws, prev, v
+  AnteriorDoVeio = False
+  If DRY_RUN Then
+    If memoVeio.Exists(veio) Then
+      v = memoVeio(veio)
+      If CLng(v(3)) < CLng(dt) Then
+        pMolde = v(0)
+        pMeta = v(1)
+        pAcum = v(2)
+        pData = v(3)
+        AnteriorDoVeio = True
+      End If
+    End If
+  Else
+    Set ws = wb.Worksheets("Historico")
+    prev = LinhaAnterior(veio, dt)
+    If prev > 0 Then
+      pMolde = Txt(ws.Cells(prev, 3).Value)
+      pMeta = ws.Cells(prev, 4).Value
+      pAcum = CDbl(ws.Cells(prev, 5).Value)
+      pData = CDate(ws.Cells(prev, 1).Value)
+      AnteriorDoVeio = True
+    End If
+  End If
+End Function
+
 Sub AplicarVeio(dt, veio, molde, meta, acum, obs)
-  Dim ws, prev, pMolde, pAcum, pMeta, pData, prod
-  Set ws = wb.Worksheets("Historico")
-  prev = LinhaAnterior(veio, dt)
-  If prev > 0 Then
-    pMolde = Txt(ws.Cells(prev, 3).Value)
-    pMeta = ws.Cells(prev, 4).Value
-    pAcum = CDbl(ws.Cells(prev, 5).Value)
-    pData = CDate(ws.Cells(prev, 1).Value)
+  Dim pMolde, pAcum, pMeta, pData, prod
+  If AnteriorDoVeio(veio, dt, pMolde, pMeta, pAcum, pData) Then
     If pMolde <> Txt(molde) Then
       RegistrarTroca dt, veio, pMolde, pMeta, pAcum, Txt(molde), obs
     ElseIf CDbl(acum) < pAcum Then
@@ -235,6 +273,7 @@ Sub AplicarVeio(dt, veio, molde, meta, acum, obs)
       If prod > 0 Then Alerta "Veio nao andou", "Veio " & veio, "Acumulado " & acum & " igual ao de " & pData & ", mas a MCC produziu " & prod & " t em " & (dt - 1) & ". Verificar parada ou e-mail repetido."
     End If
   End If
+  If DRY_RUN Then memoVeio(veio) = Array(Txt(molde), meta, CDbl(acum), dt)
   GravarHistorico dt, veio, molde, meta, acum, obs
 End Sub
 
