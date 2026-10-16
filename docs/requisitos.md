@@ -22,26 +22,21 @@ Controlar o desgaste de cada equipamento (molde, oscilador e componentes) até a
 - Bender, meta 1.100.000 t, lançado 2.000 t: falta 1.098.000 t.
 - Molde MCC4: meta 1100 corridas, acumulado inicial 1080, falta 20.
 
-## Automação de e-mails (Outlook)
+## Automação de e-mails (decidido)
 
-- **Ferramenta:** Outlook clássico (desktop) no Windows, lido por um script `.vbs` via COM.
-- **Agendamento:** Agendador de Tarefas do Windows, uma vez por dia útil, com "executar assim que possível após início perdido" marcado.
-- **Processamento:** lê todos os e-mails não processados da caixa de entrada, não só os do dia.
-- **Data do lançamento:** vem do e-mail (data de recebimento), não da data de execução.
-- **Sem duplicidade:** após lançado, o e-mail é movido para a pasta "Processados". Só lê a caixa de entrada.
-- **Revisão:** e-mail que não bate com o padrão (equipamento não encontrado, valor não numérico) vai para a pasta "Revisar", sem lançar.
-- **Remetentes:** várias pessoas enviam e-mails. Lista ainda não definida.
+- **Fonte:** e-mail diário "Relatórios GLA" no Outlook clássico, vários remetentes. Só dois anexos: `VIDA MOLDE.xlsx` e `CORTESEQ.xls`.
+- **Robô:** `scripts/atualizar_controle.vbs`, no PC com Outlook e Excel, agendado uma vez por dia útil.
+- **Não depende de lido/não lido:** guarda o ID de cada e-mail processado em `processados.txt`. Não move nem marca e-mails.
+- **Sem soma de diferenças:** molde usa o acumulado do anexo; um registro por data e veio; reenvio substitui.
+- **Troca de molde:** detectada quando o número do molde do veio muda. Vai para a aba Trocas; o molde novo começa em 0 com outra numeração. Meta fixa por veio.
+- **Componentes:** descontam a tonelada real do MCC4 só entre entrada e saída. Oscilador conta dias.
+- **Alertas no Excel:** acumulado diminuiu sem troca; veio não andou enquanto a MCC produziu; layout dos anexos mudou; troca com observação divergente.
+- **Paradas e entrada/saída:** manuais.
 
-## Pendências (bloqueiam a automação)
+## Pendências
 
-1. **Exemplo de e-mail real** (com nomes e números trocados) e o padrão do corpo.
-2. **Lista de remetentes** autorizados.
-3. **Confirmação de Outlook clássico** na máquina que vai rodar o script.
-4. **Política da empresa** sobre scripts `.vbs` (se bloqueado, precisa liberação de TI).
-5. **Local da planilha** (pasta fixa, rede ou OneDrive/SharePoint, se mais de uma pessoa usar).
-
-## Estado atual
-
-- Planilha `controle_equipamentos.xlsx` gerada por `scripts/gerar_planilha.py` (abas: Equipamentos, Movimentos, Lancamentos, Regras).
-- Script `.vbs`: não iniciado, aguarda o exemplo de e-mail.
-- Entrada e saída: manuais, pela planilha.
+1. Testar o `.vbs` no PC dele em DRY_RUN (não foi testado: sem Windows aqui).
+2. Confirmar se a produção usada no alerta "veio não andou" deve ser a do dia anterior ao relatório (assumido) ou a do próprio dia.
+3. Confirmar se os e-mails ficam na Caixa de Entrada padrão (o robô lê só ela).
+4. Acumulado inicial dos componentes e do oscilador (hoje em branco = 0).
+5. Política da empresa sobre scripts `.vbs`.
