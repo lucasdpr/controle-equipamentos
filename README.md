@@ -9,7 +9,9 @@ Planilha `controle_equipamentos.xlsx` (Excel) atualizada por um robô `.vbs` que
 
 ## Abas da planilha
 
-- **Resumo**: meta, acumulado, falta, %, situação. Itens: Molde G, Molde H, Oscilador, Bender, Bow, Straightener R1/R2, Horizontal.
+- **Painel** (abre nele): indicadores (além da meta / atenção / OK / alertas), barras de progresso e 3 gráficos (% da vida, corridas G e H, toneladas do MCC4).
+- **Resumo**: meta, acumulado, falta, %, situação. Itens: Molde G, Molde H, Oscilador, Bender, Bow, Straightener R1/R2, Horizontal. Células amarelas = você digita.
+- **Moldes**: todos os veios (C a H) com molde atual, acumulado, %, quantidade de trocas, corridas médias na saída, última troca e dias parados.
 - **Movimentos** (manual): entrada e saída de oscilador e componentes.
 - **Paradas** (manual): início, fim, motivo.
 - **Historico** (robô): um registro por data e veio (todos os veios C a H).
