@@ -1,0 +1,95 @@
+CONTROLE DE VIDA DOS EQUIPAMENTOS - MCC4 - COMO USAR
+Autor: Lucas Gabriel de Paula Rafael | Matricula cbk3574 | github.com/lucasdpr/controle-equipamentos
+
+==================================================================
+ARQUIVOS
+==================================================================
+controle_equipamentos.xlsx        -> a planilha (42 pecas do MCC4, veios G e H)
+atualizar_controle_GRAVANDO.vbs   -> ROBO PRINCIPAL: le os e-mails e GRAVA na planilha
+atualizar_controle.vbs            -> robo de TESTE: so le e escreve no robo.log (nao grava)
+
+Arquivos que o robo cria sozinho na pasta (nao apague no dia a dia):
+robo.log         -> o que o robo fez em cada rodada
+processados.txt  -> lista dos e-mails ja lidos (evita contar duas vezes)
+robo.lock        -> existe so enquanto o robo esta rodando
+temp\            -> copia temporaria dos anexos
+
+==================================================================
+1. INSTALACAO (UMA VEZ)
+==================================================================
+1. Crie a pasta C:\Controle  (FORA do OneDrive).
+2. Coloque nela: controle_equipamentos.xlsx e atualizar_controle_GRAVANDO.vbs
+   (o de teste e opcional).
+3. Botao direito no .vbs > Propriedades > se aparecer "Desbloquear", marque > OK.
+4. NAO copie processados.txt, robo.log ou planilha de versoes antigas.
+
+==================================================================
+2. CONFERIR A PLANILHA (UMA VEZ)
+==================================================================
+Abra a planilha > aba "Equipamentos". As celulas AMARELAS sao suas:
+- Tag, Tipo, MCC, Meta, Desde, Acumulado inicial.
+- Ja vieram do app (Neon) em 20/10/2026. Confira principalmente:
+  * pecas "TESTE" no veio G (C07, H07, R102, R202): se nao forem reais, apague a linha;
+  * tag H-09 repetida no veio H;
+  * osciladores (contam dias desde 10/09/2026).
+Feche a planilha depois de conferir.
+
+==================================================================
+3. PRIMEIRA RODADA
+==================================================================
+1. Feche o Excel (todas as planilhas).
+2. Abra o Outlook CLASSICO e deixe aberto.
+3. De UM duplo clique em atualizar_controle_GRAVANDO.vbs.
+4. Aparece "Robo iniciado". Espere (na primeira vez le ~45 dias de e-mails, alguns minutos).
+5. Aparece "Robo terminou" com o total de e-mails processados.
+6. Abra a planilha: ela abre no PAINEL.
+   Confira: Molde G e Molde H batem com o ultimo relatorio GLA.
+
+==================================================================
+4. TODO DIA (1 MINUTO)
+==================================================================
+1. Planilha FECHADA, Outlook aberto.
+2. Duplo clique no atualizar_controle_GRAVANDO.vbs > espere "Robo terminou".
+3. Abra a planilha no PAINEL:
+   - quadros do topo: Alem da meta / Atencao / OK / Alertas abertos;
+   - "Mais desgastados" e "Por tipo".
+4. Se "Alertas abertos" > 0: aba Alertas > confira > coluna Resolvido = "Sim".
+O robo pega tambem os e-mails dos dias que voce nao rodou (fim de semana etc.).
+
+==================================================================
+5. QUANDO TROCAR UMA PECA
+==================================================================
+MOLDE: nao faca nada. O robo ve a troca pelo relatorio e registra na aba Trocas.
+OSCILADOR, BENDER, BOW, R1, R2, HORIZONTAL:
+1. Aba TrocasEquip: anote data, tag que saiu, acumulado na saida, motivo.
+2. Aba Equipamentos, na linha da posicao:
+   - Tag = tag da peca nova;
+   - Desde = data em que entrou;
+   - Acumulado inicial = 0 (ou o que ela ja tinha, se for peca recuperada);
+   - Meta = meta da peca nova.
+
+PARADAS: aba Paradas (inicio, fim, veio, motivo) - so para registro.
+
+==================================================================
+6. RODAR SOZINHO (OPCIONAL - AGENDADOR DO WINDOWS)
+==================================================================
+1. Abra o .vbs no Bloco de Notas, troque  MOSTRAR_AVISO = True  por  False , salve.
+2. Iniciar > "Agendador de Tarefas" > Criar Tarefa Basica.
+3. Nome: Controle Equipamentos > Diariamente > horario (ex.: 09:00, depois que o e-mail chega).
+4. Acao: Iniciar um programa > Programa: wscript.exe
+   Argumentos: "C:\Controle\atualizar_controle_GRAVANDO.vbs"
+5. Concluir > abra a tarefa > Configuracoes > marque
+   "Executar a tarefa assim que possivel apos uma inicializacao agendada ser perdida".
+O PC precisa estar ligado, logado e com o Outlook disponivel.
+
+==================================================================
+7. SE DER PROBLEMA
+==================================================================
+"Robo ja esta rodando"      -> espere terminar. Se travou, apague robo.lock (vale 30 min).
+"Nao abriu a planilha"      -> feche a planilha em todo lugar; Gerenciador de Tarefas
+                               (Ctrl+Shift+Esc) > finalize EXCEL.EXE e wscript.exe.
+Numeros errados             -> mande o robo.log. Para refazer do zero: feche tudo,
+                               apague processados.txt, volte a planilha limpa e rode de novo.
+Aba Alertas "Layout alterado" -> o arquivo do relatorio mudou de formato: mande o robo.log.
+
+NUNCA renomeie as abas Historico, Producao, Trocas e Alertas (o robo escreve nelas).
