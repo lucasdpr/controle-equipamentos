@@ -391,6 +391,50 @@ Sub MarcarProcessado(id)
 End Sub
 
 ' ---- Processa um e-mail -----------------------------------------------------
+Function PastaDe(msg)
+  On Error Resume Next
+  PastaDe = msg.Parent.FolderPath
+  If Err.Number <> 0 Then PastaDe = "?"
+  On Error GoTo 0
+End Function
+
+Function PastaIgnorada(nome)
+  Dim u, termos, t
+  u = UCase(nome)
+  termos = Array("EXCLU", "LIXO", "ENVIAD", "RASCUNHO", "CAIXA DE SA", "HIST", "DELETED", "JUNK", "SENT", "DRAFT", "OUTBOX", "PUBLIC", "BLICAS", "RSS", "SYNC", "CONFLI", "FALHA")
+  PastaIgnorada = False
+  For Each t In termos
+    If InStr(u, t) > 0 Then
+      PastaIgnorada = True
+      Exit Function
+    End If
+  Next
+End Function
+
+Sub BuscarPasta(fld, filtro, corte, achados)
+  Dim itens, msg, filha
+  On Error Resume Next
+  If PastaIgnorada(fld.Name) Then Exit Sub
+  If fld.DefaultItemType = 0 Then
+    Set itens = fld.Items.Restrict(filtro)
+    If Err.Number = 0 Then
+      For Each msg In itens
+        If msg.Class = 43 Then
+          If CDate(msg.ReceivedTime) >= corte Then
+            If Not achados.Exists(msg.EntryID) Then achados.Add msg.EntryID, msg
+          End If
+        End If
+      Next
+    End If
+    Err.Clear
+  End If
+  For Each filha In fld.Folders
+    BuscarPasta filha, filtro, corte, achados
+  Next
+  Err.Clear
+  On Error GoTo 0
+End Sub
+
 Function ChaveCorte(msg)
   Dim i, nome, re, m
   ChaveCorte = ""
@@ -455,7 +499,7 @@ End Function
 
 ' ---- Principal ---------------------------------------------------------------
 Sub Executar()
-  Dim ol, ns, caixa, itens, msg, proc, tmp, seq, nOk, nFalha, nPulados, filtro, corte, res, falhou, lista, n, k, ultimo, chave, lerCorte
+  Dim ol, ns, caixa, itens, msg, proc, tmp, seq, nOk, nFalha, nPulados, filtro, corte, res, falhou, lista, n, k, ultimo, chave, lerCorte, achados, chaves, arr, i2, j2, tmpObj, recente
 
   If Not fso.FolderExists(PASTA) Then fso.CreateFolder PASTA
   tmp = PASTA & "\temp"
@@ -520,10 +564,7 @@ Sub Executar()
 
   Set ol = CreateObject("Outlook.Application")
   Set ns = ol.GetNamespace("MAPI")
-  Set caixa = ns.GetDefaultFolder(6)
   filtro = "@SQL=" & Chr(34) & "urn:schemas:httpmail:subject" & Chr(34) & " like '%" & ASSUNTO & "%'"
-  Set itens = caixa.Items.Restrict(filtro)
-  itens.Sort "[ReceivedTime]", True
   Set proc = CarregarProcessados()
   corte = Date - DIAS_RETROATIVOS
   seq = 0
@@ -531,16 +572,37 @@ Sub Executar()
   nFalha = 0
   nPulados = 0
 
-  ' Do mais novo para o mais antigo; para assim que passar dos DIAS_RETROATIVOS
-  Set lista = CreateObject("Scripting.Dictionary")
-  n = 0
-  For Each msg In itens
-    If msg.Class = 43 Then
-      If CDate(msg.ReceivedTime) < corte Then Exit For
-      n = n + 1
-      lista.Add n, msg
-    End If
+  ' Procura em TODAS as pastas de todas as contas (nao so na Caixa de Entrada)
+  Set achados = CreateObject("Scripting.Dictionary")
+  For Each caixa In ns.Folders
+    BuscarPasta caixa, filtro, corte, achados
   Next
+
+  ' Ordena do mais novo para o mais antigo
+  Set lista = CreateObject("Scripting.Dictionary")
+  n = achados.Count
+  If n > 0 Then
+    chaves = achados.Keys
+    ReDim arr(n - 1)
+    For i2 = 0 To n - 1
+      Set arr(i2) = achados(chaves(i2))
+    Next
+    For i2 = 0 To n - 2
+      For j2 = i2 + 1 To n - 1
+        If CDate(arr(j2).ReceivedTime) > CDate(arr(i2).ReceivedTime) Then
+          Set tmpObj = arr(i2)
+          Set arr(i2) = arr(j2)
+          Set arr(j2) = tmpObj
+        End If
+      Next
+    Next
+    For i2 = 0 To n - 1
+      lista.Add i2 + 1, arr(i2)
+    Next
+    recente = CDate(lista(1).ReceivedTime)
+    Registrar "E-mail GLA mais recente encontrado: " & recente
+    If Date - Int(recente) >= 2 Then Alerta "Sem relatorio recente", "E-mail GLA", "O ultimo relatorio GLA encontrado no Outlook e de " & CDate(Int(recente)) & ". Verifique se os e-mails novos chegaram ou estao em outra pasta."
+  End If
   ' Cada CORTESEQ traz o mes inteiro ate o dia: so o mais novo de cada mes precisa ser lido
   Set ultimo = CreateObject("Scripting.Dictionary")
   For k = 1 To n
@@ -550,7 +612,7 @@ Sub Executar()
       If Not ultimo.Exists(chave) Then ultimo.Add chave, k
     End If
   Next
-  Registrar "E-mails com GLA no assunto nos ultimos " & DIAS_RETROATIVOS & " dias: " & n
+  Registrar "E-mails com GLA no assunto nos ultimos " & DIAS_RETROATIVOS & " dias (todas as pastas): " & n
 
   ' Processa do mais antigo para o mais novo
   For k = n To 1 Step -1
@@ -564,7 +626,7 @@ Sub Executar()
       If chave <> "" Then
         If ultimo.Exists(chave) Then lerCorte = (ultimo(chave) = k)
       End If
-      Registrar "E-mail " & msg.ReceivedTime & " | " & msg.Subject
+      Registrar "E-mail " & msg.ReceivedTime & " | " & msg.Subject & " | pasta: " & PastaDe(msg)
       res = False
       On Error Resume Next
       res = ProcessarEmail(msg, tmp, seq, lerCorte)

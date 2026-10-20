@@ -246,6 +246,9 @@ for i in range(2, EQ_ULT + 1):
         f'IF(D{i}=3,SUMIFS(Producao!$E:$E,Producao!$A:$A,">="&F{i}),'
         f'SUMIFS(Producao!$B:$B,Producao!$A:$A,">="&F{i})))))))'
     )
+    if k < N and equip[k]["tipo"] == "Molde":
+        # a vida programada muda de um molde para outro: vem do último relatório do veio
+        eq[f"E{i}"] = f"=IF({ult_hist}=0,{equip[k]['meta']},SUMIFS(Historico!$D:$D,Historico!$B:$B,L{i},Historico!$A:$A,{ult_hist}))"
     eq[f"I{i}"] = f'=IF(OR(A{i}="",E{i}=""),"",E{i}-H{i})'
     eq[f"J{i}"] = f'=IF(OR(A{i}="",N(E{i})<=0),"",H{i}/E{i})'
     eq[f"K{i}"] = f'=IF(I{i}="","",IF(I{i}<0,"Além da meta",IF(J{i}>=Regras!$B$3,"Atenção","OK")))'
@@ -258,6 +261,9 @@ for i in range(2, EQ_ULT + 1):
         c.alignment = ESQ if c.column == 1 else CENTRO if c.column in (2, 3, 4, 6, 11, 12) else DIR
 preencher(eq, f"A2:B{EQ_ULT}", AMARELO)
 preencher(eq, f"D2:G{EQ_ULT}", AMARELO)
+for k_, e_ in enumerate(equip):
+    if e_["tipo"] == "Molde":  # meta, desde e acumulado do molde vêm do relatório: não digitar
+        preencher(eq, f"D{k_ + 2}:G{k_ + 2}", CINZA_CLARO)
 barra_percentual(eq, f"J2:J{EQ_ULT}")
 cores_situacao(eq, f"K2:K{EQ_ULT}")
 eq.column_dimensions["M"].hidden = True
