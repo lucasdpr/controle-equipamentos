@@ -20,10 +20,15 @@ Const ASSUNTO = "GLA"
 Const DIAS_RETROATIVOS = 45
 Const DRY_RUN = True
 Const MOSTRAR_AVISO = True   ' janela de aviso ao iniciar/terminar (use False se agendar)
+Const ENVIAR_EMAIL = True    ' manda resumo por e-mail quando processar relatorio novo (so gravando)
+Const EMAIL_PARA = "lucas.faria.lf1@csn.com.br"   ' separe varios com ;
+Const BACKUPS_MANTER = 15    ' copias da planilha guardadas em backup\ antes de gravar
+Const COPIA_EQUIPE_PASTA = ""  ' vazio = OneDrive\Controle Equipamentos (Equipe); "-" = nao copiar
 Const MARCA = "Lucas Gabriel de Paula Rafael | Matricula cbk3574 | github.com/lucasdpr/controle-equipamentos"
 ' ========================
 
-Dim fso, xl, wb, logPath, PASTA, PLANILHA, memoVeio, memoProd
+Dim fso, xl, wb, logPath, PASTA, PLANILHA, memoVeio, memoProd, trocasHtml
+trocasHtml = ""
 Set fso = CreateObject("Scripting.FileSystemObject")
 ' A pasta e a planilha ficam onde o proprio .vbs esta (nao precisa editar caminho)
 PASTA = fso.GetParentFolderName(WScript.ScriptFullName)
@@ -229,6 +234,7 @@ Sub RegistrarTroca(dt, veio, moldeSaiu, vidaProg, acumSaida, moldeEntrou, obs)
   ws.Cells(ult + 1, 7).Value = obs
   ws.Cells(ult + 1, 8).Value = conferir
   ws.Cells(ult + 1, 9).Value = "robo"
+  trocasHtml = trocasHtml & "<li>" & FormatDateTime(CDate(dt), 2) & " - veio " & veio & ": saiu molde " & moldeSaiu & " com " & acumSaida & " corridas, entrou molde " & moldeEntrou & "</li>"
   If conferir <> "" Then Alerta "Troca para conferir", "Veio " & veio, conferir
 End Sub
 
@@ -499,7 +505,7 @@ End Function
 
 ' ---- Principal ---------------------------------------------------------------
 Sub Executar()
-  Dim ol, ns, caixa, itens, msg, proc, tmp, seq, nOk, nFalha, nPulados, filtro, corte, res, falhou, lista, n, k, ultimo, chave, lerCorte, achados, chaves, arr, i2, j2, tmpObj, recente
+  Dim ol, ns, caixa, itens, msg, proc, tmp, seq, nOk, nFalha, nPulados, filtro, corte, res, falhou, lista, n, k, ultimo, chave, lerCorte, achados, chaves, arr, i2, j2, tmpObj, recente, htmlResumo, assuntoResumo
 
   If Not fso.FolderExists(PASTA) Then fso.CreateFolder PASTA
   tmp = PASTA & "\temp"
@@ -517,6 +523,7 @@ Sub Executar()
     Aviso "ERRO: planilha nao encontrada ao lado do robo. Veja o robo.log.", 60
     Exit Sub
   End If
+  If Not DRY_RUN Then FazerBackup
 
   Set xl = CreateObject("Excel.Application")
   xl.Visible = False
@@ -645,14 +652,201 @@ Sub Executar()
     End If
   Next
 
-  If Not DRY_RUN Then wb.Save
+  htmlResumo = ""
+  If Not DRY_RUN Then
+    wb.Save
+    If ENVIAR_EMAIL And nOk > 0 Then
+      On Error Resume Next
+      xl.Calculate
+      htmlResumo = MontarResumo(wb, assuntoResumo)
+      If Err.Number <> 0 Then
+        Registrar "AVISO: nao montou o resumo do e-mail: " & Err.Description
+        htmlResumo = ""
+        Err.Clear
+      End If
+      On Error GoTo 0
+    End If
+  End If
   wb.Close False
   xl.Quit
+  If Not DRY_RUN Then CopiaEquipe
+  If htmlResumo <> "" Then EnviarResumo ol, assuntoResumo, htmlResumo
   Registrar "==== Fim: processados=" & nOk & " com problema/sem anexos=" & nFalha & " ja feitos=" & nPulados
   Dim resumo
   resumo = "Robo terminou." & vbCrLf & "E-mails processados: " & nOk & vbCrLf & "Com problema ou sem os anexos: " & nFalha & vbCrLf & "Ja feitos antes: " & nPulados & vbCrLf
   If DRY_RUN Then resumo = resumo & "MODO TESTE: nada foi gravado. Veja o robo.log." Else resumo = resumo & "Veja o robo.log e a aba Alertas da planilha."
   Aviso resumo, 120
+End Sub
+
+' ---- Backup, copia da equipe e resumo por e-mail -----------------------------
+Sub FazerBackup()
+  Dim pb, nomeB, f, arqs, nb, i, j, t
+  On Error Resume Next
+  pb = PASTA & "\backup"
+  If Not fso.FolderExists(pb) Then fso.CreateFolder pb
+  nomeB = pb & "\controle_" & Year(Now) & "-" & Right("0" & Month(Now), 2) & "-" & Right("0" & Day(Now), 2) & "_" & Right("0" & Hour(Now), 2) & Right("0" & Minute(Now), 2) & ".xlsx"
+  fso.CopyFile PLANILHA, nomeB, True
+  If Err.Number <> 0 Then
+    Registrar "AVISO: backup falhou: " & Err.Description
+    Err.Clear
+    Exit Sub
+  End If
+  Registrar "Backup: backup\" & fso.GetFileName(nomeB)
+  ' mantem so os BACKUPS_MANTER mais novos (o nome ordena por data)
+  nb = 0
+  ReDim arqs(0)
+  For Each f In fso.GetFolder(pb).Files
+    If LCase(Left(f.Name, 9)) = "controle_" And LCase(Right(f.Name, 5)) = ".xlsx" Then
+      ReDim Preserve arqs(nb)
+      arqs(nb) = f.Name
+      nb = nb + 1
+    End If
+  Next
+  For i = 0 To nb - 2
+    For j = i + 1 To nb - 1
+      If arqs(j) < arqs(i) Then
+        t = arqs(i)
+        arqs(i) = arqs(j)
+        arqs(j) = t
+      End If
+    Next
+  Next
+  For i = 0 To nb - BACKUPS_MANTER - 1
+    fso.DeleteFile pb & "\" & arqs(i), True
+  Next
+  Err.Clear
+  On Error GoTo 0
+End Sub
+
+Sub CopiaEquipe()
+  Dim destino, sh
+  On Error Resume Next
+  destino = COPIA_EQUIPE_PASTA
+  If destino = "-" Then Exit Sub
+  If destino = "" Then
+    Set sh = CreateObject("WScript.Shell")
+    destino = sh.ExpandEnvironmentStrings("%OneDriveCommercial%")
+    If destino = "" Or destino = "%OneDriveCommercial%" Then
+      Registrar "Copia da equipe: OneDrive nao encontrado. Configure COPIA_EQUIPE_PASTA no topo do robo."
+      Exit Sub
+    End If
+    destino = destino & "\Controle Equipamentos (Equipe)"
+  End If
+  If Not fso.FolderExists(destino) Then fso.CreateFolder destino
+  fso.CopyFile PLANILHA, destino & "\controle_equipamentos (copia - nao editar).xlsx", True
+  If Err.Number <> 0 Then
+    Registrar "AVISO: copia da equipe falhou (" & destino & "): " & Err.Description
+  Else
+    Registrar "Copia da equipe atualizada: " & destino
+  End If
+  Err.Clear
+  On Error GoTo 0
+End Sub
+
+Function H_(v)
+  H_ = Replace(Replace(Replace(CStr(v & ""), "&", "&amp;"), "<", "&lt;"), ">", "&gt;")
+End Function
+
+Function MontarResumo(book, ByRef assuntoOut)
+  Dim ws, r, sit, nAlem, nAten, nOkEq, linhas, pcts, idx, i, j, t, html, wa, nAl, alertasHtml, ultimo, cor
+  Set ws = book.Worksheets("Equipamentos")
+  nAlem = 0
+  nAten = 0
+  nOkEq = 0
+  linhas = 0
+  ReDim idx(0)
+  ReDim pcts(0)
+  For r = 2 To 61
+    If Txt(ws.Cells(r, 1).Value) <> "" Then
+      sit = Txt(ws.Cells(r, 11).Value)
+      If InStr(sit, "meta") > 0 Then
+        nAlem = nAlem + 1
+      ElseIf Left(sit, 4) = "Aten" Then
+        nAten = nAten + 1
+      ElseIf sit = "OK" Then
+        nOkEq = nOkEq + 1
+      End If
+      If InStr(sit, "meta") > 0 Or Left(sit, 4) = "Aten" Then
+        ReDim Preserve idx(linhas)
+        ReDim Preserve pcts(linhas)
+        idx(linhas) = r
+        pcts(linhas) = CDbl(ws.Cells(r, 10).Value)
+        linhas = linhas + 1
+      End If
+    End If
+  Next
+  For i = 0 To linhas - 2
+    For j = i + 1 To linhas - 1
+      If pcts(j) > pcts(i) Then
+        t = pcts(i): pcts(i) = pcts(j): pcts(j) = t
+        t = idx(i): idx(i) = idx(j): idx(j) = t
+      End If
+    Next
+  Next
+  ultimo = Txt(book.Worksheets("Painel").Range("A2").Value)
+
+  html = "<div style='font-family:Calibri,Arial,sans-serif;font-size:14px;color:#222'>"
+  html = html & "<h2 style='color:#1F3864;margin:0'>Controle de Vida dos Equipamentos - MCC4</h2>"
+  html = html & "<p style='color:#595959;margin:4px 0 12px'>" & H_(ultimo) & "</p>"
+  html = html & "<table cellpadding='8' style='border-collapse:collapse;text-align:center'><tr>"
+  html = html & "<td style='background:#FFC7CE;color:#9C0006'><b style='font-size:22px'>" & nAlem & "</b><br>Al&eacute;m da meta</td>"
+  html = html & "<td style='background:#FFEB9C;color:#9C5700'><b style='font-size:22px'>" & nAten & "</b><br>Aten&ccedil;&atilde;o</td>"
+  html = html & "<td style='background:#C6EFCE;color:#006100'><b style='font-size:22px'>" & nOkEq & "</b><br>OK</td></tr></table>"
+
+  If linhas > 0 Then
+    html = html & "<h3 style='color:#1F3864'>Pe&ccedil;as que precisam de aten&ccedil;&atilde;o</h3>"
+    html = html & "<table cellpadding='5' style='border-collapse:collapse;border:1px solid #D9D9D9'>"
+    html = html & "<tr style='background:#1F3864;color:#fff'><th>Tag</th><th>Posi&ccedil;&atilde;o</th><th>Veio</th><th>Acumulado</th><th>Meta</th><th>% da vida</th><th>Situa&ccedil;&atilde;o</th></tr>"
+    For i = 0 To linhas - 1
+      r = idx(i)
+      sit = Txt(ws.Cells(r, 11).Value)
+      If InStr(sit, "meta") > 0 Then cor = "#FFC7CE" Else cor = "#FFEB9C"
+      html = html & "<tr style='background:" & cor & "'><td><b>" & H_(ws.Cells(r, 1).Value) & "</b></td><td>" & H_(ws.Cells(r, 14).Value) & "</td><td>" & H_(ws.Cells(r, 12).Value) & "</td>"
+      html = html & "<td align='right'>" & FormatNumber(CDbl(ws.Cells(r, 8).Value), 0) & " " & H_(ws.Cells(r, 3).Value) & "</td><td align='right'>" & FormatNumber(CDbl(ws.Cells(r, 5).Value), 0) & "</td>"
+      html = html & "<td align='right'><b>" & FormatPercent(CDbl(ws.Cells(r, 10).Value), 1) & "</b></td><td>" & H_(sit) & "</td></tr>"
+    Next
+    html = html & "</table>"
+  Else
+    html = html & "<p><b>Nenhuma pe&ccedil;a em aten&ccedil;&atilde;o ou al&eacute;m da meta.</b></p>"
+  End If
+
+  If trocasHtml <> "" Then html = html & "<h3 style='color:#1F3864'>Trocas de molde detectadas nesta rodada</h3><ul>" & trocasHtml & "</ul>"
+
+  Set wa = book.Worksheets("Alertas")
+  nAl = 0
+  alertasHtml = ""
+  For r = 2 To UltimaLinha(wa, 1)
+    If Txt(wa.Cells(r, 1).Value) <> "" And Txt(wa.Cells(r, 5).Value) <> "Sim" Then
+      nAl = nAl + 1
+      If nAl <= 10 Then alertasHtml = alertasHtml & "<li><b>" & H_(wa.Cells(r, 2).Value) & "</b> - " & H_(wa.Cells(r, 3).Value) & ": " & H_(wa.Cells(r, 4).Value) & "</li>"
+    End If
+  Next
+  If nAl > 0 Then
+    html = html & "<h3 style='color:#C00000'>Alertas abertos (" & nAl & ")</h3><ul>" & alertasHtml & "</ul>"
+    If nAl > 10 Then html = html & "<p>... e mais " & (nAl - 10) & " na aba Alertas.</p>"
+  End If
+  html = html & "<p style='color:#808080;font-size:11px;margin-top:18px'>Enviado automaticamente pelo robo do controle. Planilha: " & H_(PLANILHA) & "<br>" & H_(MARCA) & "</p></div>"
+
+  assuntoOut = "Controle de Vida MCC4 - " & Right("0" & Day(Date), 2) & "/" & Right("0" & Month(Date), 2) & " - " & nAlem & " alem da meta, " & nAten & " em atencao"
+  If nAl > 0 Then assuntoOut = assuntoOut & ", " & nAl & " alerta(s)"
+  MontarResumo = html
+End Function
+
+Sub EnviarResumo(ol, assuntoTxt, html)
+  Dim m
+  On Error Resume Next
+  Set m = ol.CreateItem(0)
+  m.To = EMAIL_PARA
+  m.Subject = assuntoTxt
+  m.HTMLBody = html
+  m.Send
+  If Err.Number <> 0 Then
+    Registrar "AVISO: e-mail de resumo nao enviado: " & Err.Description
+    Err.Clear
+  Else
+    Registrar "E-mail de resumo enviado para " & EMAIL_PARA
+  End If
+  On Error GoTo 0
 End Sub
 
 Sub Main()

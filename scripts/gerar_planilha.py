@@ -374,13 +374,14 @@ for r in range(2, ULTIMA + 1):
                    f'IF({mcc}=2,SUMIFS(Producao!$D:$D,{ate}),IF({mcc}=3,SUMIFS(Producao!$E:$E,{ate}),'
                    f'SUMIFS(Producao!$B:$B,{ate})))))')
     te[f"F{r}"] = f'=IF(OR(D{r}="",N(Q{r})<=0),"",D{r}/Q{r})'
+    te[f"R{r}"] = f'=IF(N{r}="","",INDEX({EQ("B")},N{r}))'
     te[f"A{r}"].number_format = "dd/mm/yyyy"
     for col in ("D", "H", "I"):
         te[f"{col}{r}"].number_format = "#,##0"
     te[f"F{r}"].number_format = "0.0%"
 preencher(te, f"A2:B{ULTIMA}", AMARELO)
 preencher(te, f"G2:K{ULTIMA}", AMARELO)
-for col in "LMNOPQ":
+for col in "LMNOPQR":
     te.column_dimensions[col].hidden = True
 larguras(te, {"A": 13, "B": 24, "C": 14, "D": 18, "E": 9, "F": 15, "G": 15, "H": 16, "I": 18, "J": 35, "K": 30})
 dv = DataValidation(type="list", formula1=f"={EQ('P')}", allow_blank=True)
@@ -388,7 +389,6 @@ dv.add(f"B2:B{ULTIMA}")
 te.add_data_validation(dv)
 validacao_data(te, f"A2:A{ULTIMA}")
 # Instruções ao lado da tabela (colunas S:T)
-te.column_dimensions["R"].width = 3
 te.column_dimensions["S"].width = 5
 te.column_dimensions["T"].width = 78
 te.merge_cells("S1:T1")
@@ -458,8 +458,11 @@ pr.sheet_properties.tabColor = CINZA
 
 tr = wb.create_sheet("Trocas")
 cabecalho(tr, ["Data", "Veio", "Molde que saiu", "Vida programada", "Corridas na saída",
-               "Molde que entrou", "Motivo", "Conferir", "Origem"], cor=CINZA)
-larguras(tr, {"A": 13, "B": 7, "C": 15, "D": 16, "E": 17, "F": 16, "G": 60, "H": 45, "I": 10})
+               "Molde que entrou", "Motivo", "Conferir", "Origem", "% da vida na saída"], cor=CINZA)
+for r in range(2, 2001):
+    tr[f"J{r}"] = f'=IF(OR(E{r}="",N(D{r})=0),"",E{r}/D{r})'
+    tr[f"J{r}"].number_format = "0.0%"
+larguras(tr, {"A": 13, "B": 7, "C": 15, "D": 16, "E": 17, "F": 16, "G": 60, "H": 45, "I": 10, "J": 17})
 tr.conditional_formatting.add(f"H2:H{LIM}", FormulaRule(formula=["LEN($H2)>0"], fill=PatternFill("solid", bgColor=AMBAR)))
 zebra(tr, f"A2:G{LIM}")
 tr.sheet_properties.tabColor = CINZA
@@ -605,7 +608,41 @@ pn.conditional_formatting.add(f"I10:I{9 + len(TIPOS)}", CellIsRule(operator="gre
                               fill=PatternFill("solid", bgColor=AMBAR), font=Font(bold=True, color="9C5700")))
 
 # Todos os equipamentos
-T0 = 19  # linha do título da seção
+# Vida real na troca (média por tipo)
+V0 = 18
+titulo_secao(pn, f"A{V0}:I{V0}", "Vida real na troca (média das trocas registradas)")
+cab_linha(pn, V0 + 1, 1, ["Tipo", "Trocas", "Média na saída", "Unidade", "Meta média", "% da meta (média)"])
+TE_ = lambda col: f"TrocasEquip!${col}$2:${col}${ULTIMA}"  # noqa: E731
+TR_ = lambda col: f"Trocas!${col}$2:${col}$2000"  # noqa: E731
+for n_, tipo in enumerate(TIPOS):
+    r = V0 + 2 + n_
+    if tipo == "Molde":
+        pn.cell(r, 1, "Molde (G e H)")
+        q = f'(COUNTIFS({TR_("B")},"G",{TR_("E")},">=0")+COUNTIFS({TR_("B")},"H",{TR_("E")},">=0"))'
+        soma = lambda col: f'(SUMIFS({TR_(col)},{TR_("B")},"G")+SUMIFS({TR_(col)},{TR_("B")},"H"))'  # noqa: E731
+        pn.cell(r, 2, f"={q}")
+        pn.cell(r, 3, f'=IF(B{r}=0,"-",{soma("E")}/B{r})')
+        pn.cell(r, 4, "corridas")
+        pn.cell(r, 5, f'=IF(B{r}=0,"-",{soma("D")}/B{r})')
+        pn.cell(r, 6, f'=IF(B{r}=0,"-",{soma("J")}/B{r})')
+    else:
+        pn.cell(r, 1, tipo)
+        pn.cell(r, 2, f'=COUNTIFS({TE_("R")},A{r},{TE_("D")},">=0")')
+        pn.cell(r, 3, f'=IFERROR(AVERAGEIFS({TE_("D")},{TE_("R")},A{r}),"-")')
+        pn.cell(r, 4, "dias" if tipo == "Oscilador" else "t")
+        pn.cell(r, 5, f'=IFERROR(AVERAGEIFS({TE_("Q")},{TE_("R")},A{r},{TE_("D")},">=0"),"-")')
+        pn.cell(r, 6, f'=IFERROR(AVERAGEIFS({TE_("F")},{TE_("R")},A{r}),"-")')
+    for j in range(1, 7):
+        c = pn.cell(r, j)
+        c.border = BORDA
+        c.alignment = ESQ if j == 1 else CENTRO
+    pn.cell(r, 3).number_format = "#,##0"
+    pn.cell(r, 5).number_format = "#,##0"
+    pn.cell(r, 6).number_format = "0.0%"
+barra_percentual(pn, f"F{V0 + 2}:F{V0 + 1 + len(TIPOS)}")
+pn.cell(V0 + 2 + len(TIPOS), 1, "Abaixo de 100% = a peça sai antes da meta (vida real menor que a prevista). Acima de 100% = durou mais que a meta.").font = Font(italic=True, size=9, color=CINZA)
+
+T0 = V0 + len(TIPOS) + 4  # linha do título da seção
 PN = N + 6
 titulo_secao(pn, f"A{T0}:I{T0}", "Todos os equipamentos")
 cab_linha(pn, T0 + 1, 1, ["Tag", "Posição", "Veio", "Meta", "Acumulado", "Falta", "% da vida", "Situação", "Desde"])

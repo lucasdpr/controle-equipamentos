@@ -75,6 +75,26 @@ NAO precisa mexer na aba Equipamentos.
 PARADAS: aba Paradas (inicio, fim, veio, motivo) - so para registro.
 
 ==================================================================
+6A. O QUE O ROBO FAZ SOZINHO A CADA RODADA (ROBO GRAVANDO)
+==================================================================
+- BACKUP: antes de gravar, copia a planilha para C:\Controle\backup\
+  (controle_AAAA-MM-DD_HHMM.xlsx) e guarda as 15 mais novas.
+  Para voltar: feche tudo, copie o backup para C:\Controle e renomeie
+  para controle_equipamentos.xlsx.
+- E-MAIL DE RESUMO: quando le relatorio novo, manda um e-mail para
+  lucas.faria.lf1@csn.com.br com: pecas em Atencao / Alem da meta,
+  trocas de molde detectadas e alertas abertos.
+  (Para mudar o destinatario: abra o .vbs no Bloco de Notas, linha
+   Const EMAIL_PARA = "..."; varios separados por ;)
+- COPIA PARA A EQUIPE: salva uma copia em
+  OneDrive\Controle Equipamentos (Equipe)\controle_equipamentos (copia - nao editar).xlsx
+  Compartilhe ESSA pasta do OneDrive com a equipe (so leitura).
+  Assim ninguem abre a planilha principal e o robo nunca fica travado.
+  (Para usar outra pasta: Const COPIA_EQUIPE_PASTA = "C:\caminho";  "-" desliga.)
+- Se o Outlook perguntar "um programa esta tentando enviar e-mail",
+  clique Permitir (ou fale com a TI para liberar).
+
+==================================================================
 6. RODAR SOZINHO (OPCIONAL - AGENDADOR DO WINDOWS)
 ==================================================================
 1. Abra o .vbs no Bloco de Notas, troque  MOSTRAR_AVISO = True  por  False , salve.
