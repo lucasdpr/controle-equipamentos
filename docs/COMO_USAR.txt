@@ -27,7 +27,8 @@ temp\            -> copia temporaria dos anexos
 2. CONFERIR A PLANILHA (UMA VEZ)
 ==================================================================
 Abra a planilha > aba "Equipamentos". As celulas AMARELAS sao suas:
-- Tag, Tipo, MCC, Meta, Desde, Acumulado inicial.
+- Tipo, MCC, Veio, Posicao e as colunas "original" (Tag, Meta, Desde,
+  Acumulado inicial da peca que estava na posicao no comeco).
 - Ja vieram do app (Neon) em 20/10/2026. Confira principalmente:
   * pecas "TESTE" no veio G (C07, H07, R102, R202): se nao forem reais, apague a linha;
   * tag H-09 repetida no veio H;
@@ -60,16 +61,16 @@ O robo pega tambem os e-mails dos dias que voce nao rodou (fim de semana etc.).
 5. QUANDO TROCAR UMA PECA
 ==================================================================
 MOLDE: nao faca nada. O robo ve a troca pelo relatorio e registra na aba Trocas.
-OSCILADOR, BENDER, BOW, R1, R2, HORIZONTAL:
-1. Aba TrocasEquip: digite SO a Data da saida, a Tag que saiu e o Motivo.
-   Acumulado na saida, Unidade, Posicao, Veio e % da vida aparecem sozinhos
-   (o acumulado congela na data da saida).
-2. Aba Equipamentos: NAO apague a linha da peca que saiu. Ela fica cinza
-   como "Saiu", sai do Painel e guarda o historico.
-3. Na primeira linha vazia da aba Equipamentos, cadastre a peca nova:
-   Tag, Tipo, MCC (4), Meta, Desde (data em que entrou), Acumulado inicial
-   (0 se nova, ou o que ja tinha se for recuperada), Veio e Posicao.
-   Ela aparece no Painel no lugar da que saiu.
+OSCILADOR, BENDER, BOW, R1, R2, HORIZONTAL - SO NA ABA TrocasEquip, UMA LINHA:
+1. Data da troca.
+2. Posicao: escolha na lista (ex.: "H - Horizontal 10" = veio H, horizontal 10).
+3. Tag que entrou.
+4. Motivo (e observacao, se quiser).
+5. So se precisar: "Meta da nova" (vazio = mesma meta da posicao) e
+   "Acum. inicial da nova" (vazio = 0; preencha se for peca recuperada que ja rodou).
+Automatico: Tag que saiu, Acumulado na saida, Unidade e % da vida na saida.
+A aba Equipamentos e o Painel passam a mostrar a peca nova naquela posicao.
+NAO precisa mexer na aba Equipamentos.
 
 PARADAS: aba Paradas (inicio, fim, veio, motivo) - so para registro.
 
