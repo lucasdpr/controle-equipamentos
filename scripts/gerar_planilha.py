@@ -89,67 +89,81 @@ def barra_percentual(ws, faixa):
 wb = Workbook()
 
 # =====================================================================
-# Resumo (cálculo por item) - tudo automático, igual ao molde
+# Resumo (uma linha por equipamento/tag) - tudo automático, igual ao molde
 # =====================================================================
 rs = wb.active
 rs.title = "Resumo"
 cabecalho(
     rs,
-    ["Item", "Tipo", "Unidade", "Meta", "Desde", "Acumulado inicial", "Acumulado", "Falta",
-     "%", "Situação", "Veio"],
+    ["Tag / Equipamento", "Tipo", "Unidade", "MCC", "Meta", "Desde", "Acumulado inicial",
+     "Acumulado", "Falta", "%", "Situação", "Veio"],
 )
-itens = [
-    ("Molde G", "Molde", "corridas", 1100, "G"),
-    ("Molde H", "Molde", "corridas", 1100, "H"),
-    ("Oscilador", "Oscilador", "dias", 730, None),
-    ("Bender", "Componente", "t", 1100000, None),
-    ("Bow", "Componente", "t", 1900000, None),
-    ("Straightener R1", "Componente", "t", 1700000, None),
-    ("Straightener R2", "Componente", "t", 1700000, None),
-    ("Horizontal", "Componente", "t", 3300000, None),
-]
-N = len(itens)
+TIPOS = ["Molde", "Oscilador", "Bender", "Bow", "Straightener R1", "Straightener R2", "Horizontal"]
+META_PADRAO = {"Molde": 1100, "Oscilador": 730, "Bender": 1100000, "Bow": 1900000,
+               "Straightener R1": 1700000, "Straightener R2": 1700000, "Horizontal": 3300000}
+equip = (
+    [("Molde G", "Molde", "G"), ("Molde H", "Molde", "H"), ("Oscilador", "Oscilador", None),
+     ("Bender", "Bender", None)]
+    + [(f"Bow {n}", "Bow", None) for n in range(1, 6)]
+    + [("Straightener R1", "Straightener R1", None), ("Straightener R2", "Straightener R2", None)]
+    + [(f"Horizontal {n:02d}", "Horizontal", None) for n in range(1, 11)]
+)
+N = len(equip)          # 21 equipamentos já listados
+RS_ULT = 41             # linhas com fórmula (cabem até 40 equipamentos)
 INICIO_DADOS = datetime.date(2026, 8, 1)  # primeiro dia com produção importada (provisório)
-for i, (nome, tipo, unidade, meta, veio) in enumerate(itens, start=2):
-    desde = None if tipo == "Molde" else INICIO_DADOS
-    rs.append([nome, tipo, unidade, meta, desde, None, None, None, None, None, veio])
-    ultima_data = f"SUMPRODUCT(MAX((Historico!$B$2:$B${LIM}=K{i})*Historico!$A$2:$A${LIM}))"
-    rs[f"G{i}"] = (
-        f'=IF(C{i}="corridas",'
-        f"SUMIFS(Historico!$E:$E,Historico!$B:$B,K{i},Historico!$A:$A,{ultima_data}),"
-        f'N(F{i})+IF(E{i}="",0,IF(C{i}="dias",MAX(0,TODAY()-E{i}),'
-        f'SUMIFS(Producao!$B:$B,Producao!$A:$A,">="&E{i}))))'
+ult_hist = f"SUMPRODUCT(MAX((Historico!$B$2:$B${LIM}=L{{i}})*Historico!$A$2:$A${LIM}))"
+for i in range(2, RS_ULT + 1):
+    k = i - 2
+    if k < N:
+        nome, tipo, veio = equip[k]
+        molde = tipo == "Molde"
+        rs.cell(i, 1, nome)
+        rs.cell(i, 2, tipo)
+        rs.cell(i, 4, None if molde else 4)
+        rs.cell(i, 5, META_PADRAO[tipo])
+        rs.cell(i, 6, None if molde else INICIO_DADOS)
+        rs.cell(i, 12, veio)
+    rs[f"C{i}"] = f'=IF(B{i}="","",IF(B{i}="Molde","corridas",IF(B{i}="Oscilador","dias","t")))'
+    uh = ult_hist.format(i=i)
+    rs[f"H{i}"] = (
+        f'=IF(A{i}="","",IF(C{i}="corridas",'
+        f"SUMIFS(Historico!$E:$E,Historico!$B:$B,L{i},Historico!$A:$A,{uh}),"
+        f'N(G{i})+IF(F{i}="",0,IF(C{i}="dias",MAX(0,TODAY()-F{i}),'
+        f'IF(D{i}=2,SUMIFS(Producao!$D:$D,Producao!$A:$A,">="&F{i}),'
+        f'IF(D{i}=3,SUMIFS(Producao!$E:$E,Producao!$A:$A,">="&F{i}),'
+        f'SUMIFS(Producao!$B:$B,Producao!$A:$A,">="&F{i})))))))'
     )
-    rs[f"H{i}"] = f'=IF(D{i}="","",D{i}-G{i})'
-    rs[f"I{i}"] = f'=IF(N(D{i})>0,G{i}/D{i},"")'
-    rs[f"J{i}"] = (
-        f'=IF(H{i}="","",IF(H{i}<0,"Além da meta",'
-        f'IF(I{i}>=Regras!$B$3,"Atenção","OK")))'
-    )
-for linha in rs.iter_rows(min_row=2, max_row=N + 1):
-    for idx in (3, 5, 6, 7):
-        linha[idx].number_format = "#,##0.##"
-    linha[4].number_format = "dd/mm/yyyy"
-    linha[8].number_format = "0.0%"
-    for c in linha:
+    rs[f"I{i}"] = f'=IF(OR(A{i}="",E{i}=""),"",E{i}-H{i})'
+    rs[f"J{i}"] = f'=IF(OR(A{i}="",N(E{i})<=0),"",H{i}/E{i})'
+    rs[f"K{i}"] = f'=IF(I{i}="","",IF(I{i}<0,"Além da meta",IF(J{i}>=Regras!$B$3,"Atenção","OK")))'
+    for col, fmt in (("E", "#,##0.##"), ("G", "#,##0.##"), ("H", "#,##0.##"), ("I", "#,##0.##"),
+                     ("F", "dd/mm/yyyy"), ("J", "0.0%")):
+        rs[f"{col}{i}"].number_format = fmt
+    for c in rs[i]:
         c.border = BORDA
-        c.alignment = Alignment(horizontal="center" if c.column in (2, 3, 5, 10, 11) else "left" if c.column == 1 else "right")
-preencher(rs, f"E4:F{N + 1}", AMARELO)  # Desde e Acumulado inicial dos equipamentos: digitar
-barra_percentual(rs, f"I2:I{N + 1}")
-cores_situacao(rs, f"J2:J{N + 1}")
-rs["A12"] = "Molde: automático pelo relatório (corridas do veio). Oscilador e componentes: automático também, a partir da data em 'Desde'."
-rs["A13"] = "Componentes e oscilador: acumulado = 'Acumulado inicial' + toneladas do MCC4 (ou dias, no oscilador) desde a data 'Desde'."
-rs["A14"] = "ATENÇÃO: 'Desde' = 01/08/2026 é PROVISÓRIO (início dos dados). Digite a data real de instalação e o acumulado até o dia anterior."
-rs["A15"] = "Trocou um equipamento? Registre a saída em 'TrocasEquip', depois digite a nova data em 'Desde' e zere o 'Acumulado inicial'."
-for r_ in (12, 13, 14, 15):
-    rs[f"A{r_}"].font = Font(italic=True, color="9C0006" if r_ == 14 else CINZA)
-larguras(rs, {"A": 18, "B": 13, "C": 11, "D": 14, "E": 13, "F": 16, "G": 14, "H": 14, "I": 16, "J": 14, "K": 7})
-dv_un = DataValidation(type="list", formula1='"t,corridas,dias"', allow_blank=True)
-dv_un.add("C2:C200")
-rs.add_data_validation(dv_un)
+        c.alignment = Alignment(horizontal="left" if c.column == 1 else
+                                "center" if c.column in (2, 3, 4, 6, 11, 12) else "right")
+preencher(rs, f"A2:B{RS_ULT}", AMARELO)     # tag e tipo
+preencher(rs, f"D2:G{RS_ULT}", AMARELO)     # MCC, meta, desde, acumulado inicial
+barra_percentual(rs, f"J2:J{RS_ULT}")
+cores_situacao(rs, f"K2:K{RS_ULT}")
+rs[f"A{RS_ULT + 3}"] = "Cada linha é um equipamento com a SUA tag e a SUA meta. Digite a tag real em 'Tag / Equipamento' e a meta de cada um."
+rs[f"A{RS_ULT + 4}"] = "Molde: automático pelo relatório (corridas do veio G ou H). Oscilador e componentes: automático também, a partir da data em 'Desde'."
+rs[f"A{RS_ULT + 5}"] = "Acumulado = 'Acumulado inicial' + toneladas da MCC escolhida (ou dias, no oscilador) desde a data 'Desde'."
+rs[f"A{RS_ULT + 6}"] = "ATENÇÃO: metas padrão por tipo e 'Desde' = 01/08/2026 são PROVISÓRIOS. Digite a meta, a data de instalação e o acumulado inicial reais de cada tag."
+rs[f"A{RS_ULT + 7}"] = "Trocou um equipamento? Registre a saída em 'TrocasEquip', depois digite a nova data em 'Desde' e zere o 'Acumulado inicial'."
+for r_ in range(RS_ULT + 3, RS_ULT + 8):
+    rs[f"A{r_}"].font = Font(italic=True, color="9C0006" if r_ == RS_ULT + 6 else CINZA)
+larguras(rs, {"A": 22, "B": 17, "C": 10, "D": 6, "E": 13, "F": 12, "G": 16, "H": 14, "I": 14, "J": 15, "K": 14, "L": 7})
+dv_tp = DataValidation(type="list", formula1='"' + ",".join(TIPOS) + '"', allow_blank=True)
+dv_tp.add(f"B2:B{RS_ULT}")
+rs.add_data_validation(dv_tp)
+dv_mcc = DataValidation(type="list", formula1='"2,3,4"', allow_blank=True)
+dv_mcc.add(f"D2:D{RS_ULT}")
+rs.add_data_validation(dv_mcc)
 dv_ds = DataValidation(type="date", operator="greaterThan", formula1="36526", allow_blank=True,
                        error="Digite uma data válida (dd/mm/aaaa).", errorTitle="Data inválida")
-dv_ds.add("E2:E200")
+dv_ds.add(f"F2:F{RS_ULT}")
 rs.add_data_validation(dv_ds)
 rs.sheet_properties.tabColor = AZUL
 
@@ -208,7 +222,7 @@ for r in range(2, ULTIMA + 1):
     te[f"A{r}"].number_format = "dd/mm/yyyy"
 preencher(te, f"A2:F{ULTIMA}", AMARELO)
 larguras(te, {"A": 15, "B": 20, "C": 20, "D": 10, "E": 45, "F": 40})
-dv_eq = DataValidation(type="list", formula1="=Resumo!$A$4:$A$200", allow_blank=True)
+dv_eq = DataValidation(type="list", formula1="=Resumo!$A$2:$A$200", allow_blank=True)
 dv_eq.add(f"B2:B{ULTIMA}")
 te.add_data_validation(dv_eq)
 dv_dt = DataValidation(type="date", operator="greaterThan", formula1="36526", allow_blank=True,
@@ -350,9 +364,9 @@ pn["A3"].alignment = Alignment(indent=1)
 
 # Indicadores
 kpis = [
-    ("A4:B4", "A5:B5", "Além da meta", f'=COUNTIF(Resumo!$J$2:$J${N + 1},"Além da meta")', VERMELHO, "9C0006"),
-    ("C4:D4", "C5:D5", "Atenção", f'=COUNTIF(Resumo!$J$2:$J${N + 1},"Atenção")', AMBAR, "9C5700"),
-    ("E4:F4", "E5:F5", "OK", f'=COUNTIF(Resumo!$J$2:$J${N + 1},"OK")', VERDE, "006100"),
+    ("A4:B4", "A5:B5", "Além da meta", f'=COUNTIF(Resumo!$K$2:$K${RS_ULT},"Além da meta")', VERMELHO, "9C0006"),
+    ("C4:D4", "C5:D5", "Atenção", f'=COUNTIF(Resumo!$K$2:$K${RS_ULT},"Atenção")', AMBAR, "9C5700"),
+    ("E4:F4", "E5:F5", "OK", f'=COUNTIF(Resumo!$K$2:$K${RS_ULT},"OK")', VERDE, "006100"),
     ("G4:H4", "G5:H5", "Alertas abertos",
      f'=COUNTA(Alertas!$A$2:$A${LIM})-COUNTIFS(Alertas!$E$2:$E${LIM},"Sim")', AZUL_CLARO, AZUL),
 ]
@@ -372,19 +386,24 @@ for topo, valor, titulo, formula, fundo, cor in kpis:
 pn.row_dimensions[5].height = 42
 
 # Tabela do painel (espelha o Resumo)
-cab = ["Item", "Unidade", "Meta", "Acumulado", "Falta", "%", "Situação", "Desde"]
+PN = N + 3  # linhas do painel (equipamentos + 3 de folga)
+cab = ["Tag / Equipamento", "Tipo", "Meta", "Acumulado", "Falta", "%", "Situação", "Desde"]
 for j, t in enumerate(cab, start=1):
     c = pn.cell(row=7, column=j, value=t)
     c.font = Font(bold=True, color="FFFFFF")
     c.fill = PatternFill("solid", fgColor=AZUL)
     c.alignment = Alignment(horizontal="center", vertical="center")
     c.border = BORDA
-origem = {1: "A", 2: "C", 3: "D", 4: "G", 5: "H", 6: "I", 7: "J", 8: "E"}
-for k in range(N):
+origem = {1: "A", 2: "B", 3: "E", 4: "H", 5: "I", 6: "J", 7: "K", 8: "F"}
+for k in range(PN):
     r = 8 + k
     for j, col in origem.items():
         ref = f"Resumo!{col}{k + 2}"
-        c = pn.cell(row=r, column=j, value=f'=IF({ref}="","-",{ref})' if j == 8 else f"={ref}")
+        if j == 8:
+            f = f'=IF(OR(Resumo!A{k + 2}="",{ref}=""),"",{ref})'
+        else:
+            f = f'=IF(Resumo!A{k + 2}="","",{ref})'
+        c = pn.cell(row=r, column=j, value=f)
         c.border = BORDA
         c.alignment = Alignment(horizontal="left" if j == 1 else "center" if j in (2, 7, 8) else "right")
         if j in (3, 4, 5):
@@ -393,21 +412,21 @@ for k in range(N):
             c.number_format = "0.0%"
         if j == 8:
             c.number_format = "dd/mm/yyyy"
-barra_percentual(pn, f"F8:F{7 + N}")
-cores_situacao(pn, f"G8:G{7 + N}")
+barra_percentual(pn, f"F8:F{7 + PN}")
+cores_situacao(pn, f"G8:G{7 + PN}")
 
 # Gráficos
 c1 = BarChart()
 c1.type = "bar"
 c1.title = "% da vida consumida"
 c1.style = 10
-c1.add_data(Reference(pn, min_col=6, min_row=7, max_row=7 + N), titles_from_data=True)
-c1.set_categories(Reference(pn, min_col=1, min_row=8, max_row=7 + N))
+c1.add_data(Reference(pn, min_col=6, min_row=7, max_row=7 + PN), titles_from_data=True)
+c1.set_categories(Reference(pn, min_col=1, min_row=8, max_row=7 + PN))
 c1.y_axis.number_format = "0%"
 c1.y_axis.scaling.min = 0
 c1.legend = None
-c1.height, c1.width = 8.5, 12
-pn.add_chart(c1, "A18")
+c1.height, c1.width = 12.5, 12
+pn.add_chart(c1, f"A{9 + PN}")
 
 c2 = LineChart()
 c2.title = "Corridas dos moldes G e H (30 dias)"
@@ -415,8 +434,8 @@ c2.style = 12
 c2.add_data(Reference(ax, min_col=2, max_col=3, min_row=1, max_row=31), titles_from_data=True)
 c2.set_categories(Reference(ax, min_col=1, min_row=2, max_row=31))
 c2.y_axis.scaling.min = 0
-c2.height, c2.width = 8.5, 12
-pn.add_chart(c2, "E18")
+c2.height, c2.width = 6, 12
+pn.add_chart(c2, f"E{9 + PN}")
 
 c3 = BarChart()
 c3.type = "col"
@@ -425,8 +444,8 @@ c3.style = 10
 c3.add_data(Reference(ax, min_col=4, min_row=1, max_row=31), titles_from_data=True)
 c3.set_categories(Reference(ax, min_col=1, min_row=2, max_row=31))
 c3.legend = None
-c3.height, c3.width = 7.5, 24
-pn.add_chart(c3, "A35")
+c3.height, c3.width = 6, 12
+pn.add_chart(c3, f"E{21 + PN}")
 
 pn.sheet_properties.tabColor = AZUL
 pn.page_setup.orientation = "landscape"
