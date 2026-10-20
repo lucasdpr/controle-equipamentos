@@ -387,6 +387,40 @@ dv = DataValidation(type="list", formula1=f"={EQ('P')}", allow_blank=True)
 dv.add(f"B2:B{ULTIMA}")
 te.add_data_validation(dv)
 validacao_data(te, f"A2:A{ULTIMA}")
+# Instruções ao lado da tabela (colunas S:T)
+te.column_dimensions["R"].width = 3
+te.column_dimensions["S"].width = 5
+te.column_dimensions["T"].width = 78
+te.merge_cells("S1:T1")
+te["S1"] = "COMO PREENCHER UMA TROCA (uma linha por troca)"
+te["S1"].font = Font(bold=True, color="FFFFFF", size=12)
+te["S1"].fill = PatternFill("solid", fgColor=OURO)
+te["S1"].alignment = ESQ
+passos_te = [
+    ("1", "Data da troca: o dia em que a peça foi trocada (dd/mm/aaaa)."),
+    ("2", "Posição: escolha na lista. Ex.: \"H - Horizontal 10\" = veio H, horizontal 10."),
+    ("3", "Tag que entrou: a tag da peça nova (ex.: H-30)."),
+    ("4", "Meta da nova: SÓ se for diferente da meta atual da posição. Vazio = mesma meta."),
+    ("5", "Acum. inicial da nova: SÓ se a peça já rodou antes (recuperada). Vazio = começa do zero."),
+    ("6", "Motivo e Observação: o porquê da troca (fim de vida, quebra, reparo...)."),
+    ("", ""),
+    ("✔", "Aparecem sozinhos: Tag que saiu, Acumulado na saída, Unidade e % da vida na saída."),
+    ("✔", "A aba Equipamentos e o Painel passam a mostrar a peça nova na posição. Não precisa mexer lá."),
+    ("!", "Molde NÃO entra aqui: a troca de molde o robô pega sozinho do relatório (aba Trocas)."),
+    ("!", "Errou? Corrija a própria linha. Não apague trocas antigas: elas guardam o histórico da posição."),
+    ("", ""),
+    ("Ex.", "20/10/2026  |  H - Horizontal 10  |  H-30  |  (vazio)  |  (vazio)  |  fim de vida"),
+]
+for n_, (num, txt) in enumerate(passos_te, start=2):
+    a_ = te.cell(n_, 19, num)
+    b_ = te.cell(n_, 20, txt)
+    a_.font = Font(bold=True, color=OURO if num.isdigit() else ("006100" if num == "✔" else VERMELHO_ESC if num == "!" else NAVY))
+    a_.alignment = CENTRO
+    b_.alignment = Alignment(wrap_text=True, vertical="center")
+    if txt:
+        for c_ in (a_, b_):
+            c_.fill = PatternFill("solid", fgColor=CINZA_CLARO)
+            c_.border = BORDA
 te.sheet_properties.tabColor = OURO
 
 pa = wb.create_sheet("Paradas")
