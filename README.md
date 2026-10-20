@@ -9,8 +9,9 @@ Planilha `controle_equipamentos.xlsx` (Excel) atualizada por um robô `.vbs` que
 
 ## Abas da planilha
 
-- **Painel** (abre nele): indicadores (além da meta / atenção / OK / alertas), barras de progresso e 3 gráficos (% da vida, corridas G e H, toneladas do MCC4).
-- **Resumo**: uma linha por equipamento/tag (21 já listados: 2 moldes G e H, oscilador, Bender, 5 Bow, R1, R2 e 10 Horizontais; cabem até 40). Cada tag tem a sua meta, MCC, "Desde" e acumulado inicial (células amarelas). Metas e "Desde = 01/08/2026" são provisórios.
+- **Início**: como usar, com links para cada aba.
+- **Painel** (abre nele): indicadores (equipamentos / além da meta / atenção / OK / alertas), mais desgastados, resumo por tipo, todos os equipamentos e 3 gráficos.
+- **Equipamentos**: uma linha por equipamento/tag (21 já listados: 2 moldes G e H, oscilador, Bender, 5 Bow, R1, R2 e 10 Horizontais; cabem até 40). Cada tag tem a sua meta, MCC, "Desde" e acumulado inicial (células amarelas). Metas e "Desde = 01/08/2026" são provisórios.
 - **Moldes**: todos os veios (C a H) com molde atual, acumulado, %, quantidade de trocas, corridas médias na saída, última troca e dias parados.
 - **TrocasEquip** (manual): registro da saída de oscilador e componentes (quando trocar um, registre aqui e digite a nova data em "Desde" no Resumo).
 - **Paradas** (manual): início, fim, motivo.
