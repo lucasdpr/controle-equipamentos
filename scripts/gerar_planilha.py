@@ -17,6 +17,9 @@ linha 1 e ordem das colunas NÃO podem mudar sem mudar o robô junto.
 """
 
 import datetime
+import importlib.util
+import os
+import re
 from pathlib import Path
 
 from openpyxl import Workbook
@@ -30,7 +33,7 @@ SAIDA = Path(__file__).resolve().parent.parent / "controle_equipamentos.xlsx"
 MARCA = "Lucas Gabriel de Paula Rafael  |  Matrícula cbk3574  |  github.com/lucasdpr/controle-equipamentos"
 ULTIMA = 1000   # linhas preparadas nas abas manuais
 LIM = 5000      # intervalo usado nas fórmulas das abas do robô
-EQ_ULT = 41     # aba Equipamentos: linhas 2..41 (até 40 equipamentos)
+EQ_ULT = 61     # aba Equipamentos: linhas 2..61 (até 60 equipamentos)
 INICIO_DADOS = datetime.date(2026, 8, 1)  # primeiro dia com produção importada (provisório)
 
 # ---- Paleta ----------------------------------------------------------------
@@ -146,29 +149,93 @@ wb = Workbook()
 eq = wb.active
 eq.title = "Equipamentos"
 cabecalho(eq, ["Tag / Equipamento", "Tipo", "Unidade", "MCC", "Meta", "Desde", "Acumulado inicial",
-               "Acumulado", "Falta", "% da vida", "Situação", "Veio", "chave"], filtro=False)
+               "Acumulado", "Falta", "% da vida", "Situação", "Veio", "chave", "Posição", "ID no app"], filtro=False)
 TIPOS = ["Molde", "Oscilador", "Bender", "Bow", "Straightener R1", "Straightener R2", "Horizontal"]
 META_PADRAO = {"Molde": 1100, "Oscilador": 730, "Bender": 1100000, "Bow": 1900000,
                "Straightener R1": 1700000, "Straightener R2": 1700000, "Horizontal": 3300000}
-equip = (
-    [("Molde G", "Molde", "G"), ("Molde H", "Molde", "H"), ("Oscilador", "Oscilador", None),
-     ("Bender", "Bender", None)]
-    + [(f"Bow {n}", "Bow", None) for n in range(1, 6)]
-    + [("Straightener R1", "Straightener R1", None), ("Straightener R2", "Straightener R2", None)]
-    + [(f"Horizontal {n:02d}", "Horizontal", None) for n in range(1, 11)]
-)
-N = len(equip)  # 21
+SNAPSHOT = datetime.date(2026, 10, 20)  # data em que os acumulados do app foram lidos
+
+
+def _tipo(t):
+    t = (t or "").upper()
+    if t.startswith("HORIZONTAL"):
+        return "Horizontal"
+    if t in ("R1", "STRAIGHTENER R1"):
+        return "Straightener R1"
+    if t in ("R2", "STRAIGHTENER R2"):
+        return "Straightener R2"
+    return {"BOW": "Bow", "BENDER": "Bender", "OSCILADOR": "Oscilador", "MOLDE": "Molde"}.get(t, t.title())
+
+
+def _posicao(tipo, pos):
+    m = re.search(r"(\d+)", pos or "")
+    if tipo == "Horizontal" and m:
+        return f"Horizontal {int(m.group(1)) - 7:02d}"  # HOR-8 = Horizontal 01 ... HOR-17 = Horizontal 10
+    if tipo == "Bow" and m:
+        return f"Bow {m.group(1)}"
+    if tipo == "Oscilador":
+        return "Oscilador " + ("Norte" if (pos or "").endswith("N") else "Sul")
+    return tipo
+
+
+def _data(txt):
+    try:
+        d, m_, a_ = (int(x) for x in txt.split("/"))
+        return datetime.date(a_, m_, d)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def carregar_equipamentos():
+    """Lista do app (Neon) se DADOS_EQUIP apontar para o snapshot; senão, lista genérica."""
+    caminho = os.environ.get("DADOS_EQUIP")
+    itens = [dict(tag="Molde G", tipo="Molde", veio="G", meta=1100, pos="Molde (relatório)", id=""),
+             dict(tag="Molde H", tipo="Molde", veio="H", meta=1100, pos="Molde (relatório)", id="")]
+    if not caminho:
+        genericos = ([("Oscilador", "Oscilador")] + [("Bender", "Bender")] + [(f"Bow {n}", "Bow") for n in range(1, 6)]
+                     + [("Straightener R1", "Straightener R1"), ("Straightener R2", "Straightener R2")]
+                     + [(f"Horizontal {n:02d}", "Horizontal") for n in range(1, 11)])
+        for nome, tipo in genericos:
+            itens.append(dict(tag=nome, tipo=tipo, veio="", meta=META_PADRAO[tipo], pos=nome, id="",
+                              desde=INICIO_DADOS, inicial=None))
+        return itens
+    spec = importlib.util.spec_from_file_location("dados_equip", caminho)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    ordem = {t: n for n, t in enumerate(TIPOS)}
+    lista = []
+    for (id_, tag, tipo, local, pos, ton, meta, entrada) in mod.ROWS:
+        tipo_n = _tipo(tipo)
+        if tipo_n == "Molde":
+            continue  # molde vem do relatório diário (Molde G / Molde H)
+        veio = local.strip()[-1]
+        posicao = _posicao(tipo_n, pos)
+        if tipo_n == "Oscilador":  # conta dias desde a entrada
+            desde, inicial = _data(entrada) or SNAPSHOT, None
+        else:                      # parte do acumulado do app e soma a produção a partir do snapshot
+            desde, inicial = SNAPSHOT, ton
+        lista.append(dict(tag=tag or id_, tipo=tipo_n, veio=veio, meta=meta, pos=posicao, id=id_,
+                          desde=desde, inicial=inicial))
+    lista.sort(key=lambda e: (e["veio"], ordem.get(e["tipo"], 99), e["pos"]))
+    return itens + lista
+
+
+equip = carregar_equipamentos()
+N = len(equip)
 for i in range(2, EQ_ULT + 1):
     k = i - 2
     if k < N:
-        nome, tipo, veio = equip[k]
-        molde = tipo == "Molde"
-        eq.cell(i, 1, nome)
-        eq.cell(i, 2, tipo)
+        e = equip[k]
+        molde = e["tipo"] == "Molde"
+        eq.cell(i, 1, e["tag"])
+        eq.cell(i, 2, e["tipo"])
         eq.cell(i, 4, None if molde else 4)
-        eq.cell(i, 5, META_PADRAO[tipo])
-        eq.cell(i, 6, None if molde else INICIO_DADOS)
-        eq.cell(i, 12, veio)
+        eq.cell(i, 5, e["meta"])
+        eq.cell(i, 6, None if molde else e.get("desde"))
+        eq.cell(i, 7, None if molde else e.get("inicial"))
+        eq.cell(i, 12, e["veio"] or None)
+        eq.cell(i, 14, e["pos"])
+        eq.cell(i, 15, e["id"] or None)
     ult_hist = f"SUMPRODUCT(MAX((Historico!$B$2:$B${LIM}=L{i})*Historico!$A$2:$A${LIM}))"
     eq[f"C{i}"] = f'=IF(B{i}="","",IF(B{i}="Molde","corridas",IF(B{i}="Oscilador","dias","t")))'
     eq[f"H{i}"] = (
@@ -186,7 +253,7 @@ for i in range(2, EQ_ULT + 1):
     for col, fmt in (("E", "#,##0"), ("G", "#,##0"), ("H", "#,##0"), ("I", "#,##0"),
                      ("F", "dd/mm/yyyy"), ("J", "0.0%")):
         eq[f"{col}{i}"].number_format = fmt
-    for c in eq[i][:12]:
+    for c in list(eq[i][:12]) + [eq.cell(i, 14), eq.cell(i, 15)]:
         c.border = BORDA
         c.alignment = ESQ if c.column == 1 else CENTRO if c.column in (2, 3, 4, 6, 11, 12) else DIR
 preencher(eq, f"A2:B{EQ_ULT}", AMARELO)
@@ -205,7 +272,8 @@ notas = [
 for n_, (txt, negrito, cor) in enumerate(notas):
     c = eq.cell(EQ_ULT + 3 + n_, 1, txt)
     c.font = Font(italic=not negrito, bold=negrito, color=cor)
-larguras(eq, {"A": 22, "B": 17, "C": 10, "D": 7, "E": 13, "F": 12, "G": 16, "H": 14, "I": 14, "J": 16, "K": 14, "L": 7})
+larguras(eq, {"A": 22, "B": 17, "C": 10, "D": 7, "E": 13, "F": 12, "G": 16, "H": 14, "I": 14, "J": 16, "K": 14, "L": 7,
+              "N": 18, "O": 18})
 dv = DataValidation(type="list", formula1='"' + ",".join(TIPOS) + '"', allow_blank=True)
 dv.add(f"B2:B{EQ_ULT}")
 eq.add_data_validation(dv)
@@ -459,8 +527,8 @@ pn.conditional_formatting.add(f"I10:I{9 + len(TIPOS)}", CellIsRule(operator="gre
 T0 = 19  # linha do título da seção
 PN = N + 3
 titulo_secao(pn, f"A{T0}:I{T0}", "Todos os equipamentos")
-cab_linha(pn, T0 + 1, 1, ["Tag / Equipamento", "Tipo", "Unidade", "Meta", "Acumulado", "Falta", "% da vida", "Situação", "Desde"])
-origem = {1: "A", 2: "B", 3: "C", 4: "E", 5: "H", 6: "I", 7: "J", 8: "K", 9: "F"}
+cab_linha(pn, T0 + 1, 1, ["Tag", "Posição", "Veio", "Meta", "Acumulado", "Falta", "% da vida", "Situação", "Desde"])
+origem = {1: "A", 2: "N", 3: "L", 4: "E", 5: "H", 6: "I", 7: "J", 8: "K", 9: "F"}
 for k in range(PN):
     r = T0 + 2 + k
     for j, col in origem.items():
@@ -493,7 +561,7 @@ c1.set_categories(Reference(pn, min_col=1, min_row=L1, max_row=L2))
 c1.y_axis.number_format = "0%"
 c1.y_axis.scaling.min = 0
 c1.legend = None
-c1.height, c1.width = 13, 12.5
+c1.height, c1.width = max(13, PN * 0.42), 12.5
 pn.add_chart(c1, f"A{G0 + 1}")
 
 c2 = LineChart()
