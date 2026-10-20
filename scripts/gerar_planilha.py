@@ -33,7 +33,7 @@ SAIDA = Path(__file__).resolve().parent.parent / "controle_equipamentos.xlsx"
 MARCA = "Lucas Gabriel de Paula Rafael  |  Matrícula cbk3574  |  github.com/lucasdpr/controle-equipamentos"
 ULTIMA = 1000   # linhas preparadas nas abas manuais
 LIM = 5000      # intervalo usado nas fórmulas das abas do robô
-EQ_ULT = 61     # aba Equipamentos: linhas 2..61 (até 60 equipamentos)
+EQ_ULT = 201    # aba Equipamentos: linhas 2..201 (peças ativas + as que já saíram)
 INICIO_DADOS = datetime.date(2026, 8, 1)  # primeiro dia com produção importada (provisório)
 
 # ---- Paleta ----------------------------------------------------------------
@@ -149,7 +149,8 @@ wb = Workbook()
 eq = wb.active
 eq.title = "Equipamentos"
 cabecalho(eq, ["Tag / Equipamento", "Tipo", "Unidade", "MCC", "Meta", "Desde", "Acumulado inicial",
-               "Acumulado", "Falta", "% da vida", "Situação", "Veio", "chave", "Posição", "ID no app"], filtro=False)
+               "Acumulado", "Falta", "% da vida", "Situação", "Veio", "chave", "Posição", "ID no app",
+               "Saída (TrocasEquip)", "ativo"], filtro=False)
 TIPOS = ["Molde", "Oscilador", "Bender", "Bow", "Straightener R1", "Straightener R2", "Horizontal"]
 META_PADRAO = {"Molde": 1100, "Oscilador": 730, "Bender": 1100000, "Bow": 1900000,
                "Straightener R1": 1700000, "Straightener R2": 1700000, "Horizontal": 3300000}
@@ -238,25 +239,33 @@ for i in range(2, EQ_ULT + 1):
         eq.cell(i, 15, e["id"] or None)
     ult_hist = f"SUMPRODUCT(MAX((Historico!$B$2:$B${LIM}=L{i})*Historico!$A$2:$A${LIM}))"
     eq[f"C{i}"] = f'=IF(B{i}="","",IF(B{i}="Molde","corridas",IF(B{i}="Oscilador","dias","t")))'
+    # Saída: primeira data em TrocasEquip para esta tag a partir de "Desde" (congela o acumulado)
+    eq[f"P{i}"] = (
+        f'=IF(OR(A{i}="",B{i}="Molde",F{i}=""),"",IF(COUNTIFS(TrocasEquip!$B$2:$B$1000,A{i},TrocasEquip!$A$2:$A$1000,">="&F{i})=0,"",'
+        f'_xlfn.MINIFS(TrocasEquip!$A$2:$A$1000,TrocasEquip!$B$2:$B$1000,A{i},TrocasEquip!$A$2:$A$1000,">="&F{i})))'
+    )
+    fim = f'IF(P{i}="",TODAY()+1,P{i})'
     eq[f"H{i}"] = (
         f'=IF(A{i}="","",IF(C{i}="corridas",'
         f"SUMIFS(Historico!$E:$E,Historico!$B:$B,L{i},Historico!$A:$A,{ult_hist}),"
-        f'N(G{i})+IF(F{i}="",0,IF(C{i}="dias",MAX(0,TODAY()-F{i}),'
-        f'IF(D{i}=2,SUMIFS(Producao!$D:$D,Producao!$A:$A,">="&F{i}),'
-        f'IF(D{i}=3,SUMIFS(Producao!$E:$E,Producao!$A:$A,">="&F{i}),'
-        f'SUMIFS(Producao!$B:$B,Producao!$A:$A,">="&F{i})))))))'
+        f'N(G{i})+IF(F{i}="",0,IF(C{i}="dias",MAX(0,IF(P{i}="",TODAY(),P{i})-F{i}),'
+        f'IF(D{i}=2,SUMIFS(Producao!$D:$D,Producao!$A:$A,">="&F{i},Producao!$A:$A,"<"&{fim}),'
+        f'IF(D{i}=3,SUMIFS(Producao!$E:$E,Producao!$A:$A,">="&F{i},Producao!$A:$A,"<"&{fim}),'
+        f'SUMIFS(Producao!$B:$B,Producao!$A:$A,">="&F{i},Producao!$A:$A,"<"&{fim})))))))'
     )
     if k < N and equip[k]["tipo"] == "Molde":
         # a vida programada muda de um molde para outro: vem do último relatório do veio
         eq[f"E{i}"] = f"=IF({ult_hist}=0,{equip[k]['meta']},SUMIFS(Historico!$D:$D,Historico!$B:$B,L{i},Historico!$A:$A,{ult_hist}))"
     eq[f"I{i}"] = f'=IF(OR(A{i}="",E{i}=""),"",E{i}-H{i})'
     eq[f"J{i}"] = f'=IF(OR(A{i}="",N(E{i})<=0),"",H{i}/E{i})'
-    eq[f"K{i}"] = f'=IF(I{i}="","",IF(I{i}<0,"Além da meta",IF(J{i}>=Regras!$B$3,"Atenção","OK")))'
-    eq[f"M{i}"] = f'=IF(J{i}="",-1,J{i}+ROW()/1000000000)'  # chave única para o ranking do Painel
+    eq[f"K{i}"] = f'=IF(I{i}="","",IF(P{i}<>"","Saiu",IF(I{i}<0,"Além da meta",IF(J{i}>=Regras!$B$3,"Atenção","OK"))))'
+    eq[f"M{i}"] = f'=IF(OR(J{i}="",K{i}="Saiu"),-1,J{i}+ROW()/1000000000)'  # chave do ranking (só ativos)
+    eq[f"Q{i}"] = f'=IF(AND(A{i}<>"",K{i}<>"Saiu"),ROW(),"")'  # linhas ativas, para o Painel
+    eq[f"P{i}"].number_format = "dd/mm/yyyy"
     for col, fmt in (("E", "#,##0"), ("G", "#,##0"), ("H", "#,##0"), ("I", "#,##0"),
                      ("F", "dd/mm/yyyy"), ("J", "0.0%")):
         eq[f"{col}{i}"].number_format = fmt
-    for c in list(eq[i][:12]) + [eq.cell(i, 14), eq.cell(i, 15)]:
+    for c in list(eq[i][:12]) + [eq.cell(i, 14), eq.cell(i, 15), eq.cell(i, 16)]:
         c.border = BORDA
         c.alignment = ESQ if c.column == 1 else CENTRO if c.column in (2, 3, 4, 6, 11, 12) else DIR
 preencher(eq, f"A2:B{EQ_ULT}", AMARELO)
@@ -267,13 +276,16 @@ for k_, e_ in enumerate(equip):
 barra_percentual(eq, f"J2:J{EQ_ULT}")
 cores_situacao(eq, f"K2:K{EQ_ULT}")
 eq.column_dimensions["M"].hidden = True
+eq.column_dimensions["Q"].hidden = True
+preencher(eq, f"P2:P{EQ_ULT}", CINZA_CLARO)
+eq.conditional_formatting.add(f"A2:P{EQ_ULT}", FormulaRule(formula=['$K2="Saiu"'], font=Font(color="A6A6A6", italic=True)))
 notas = [
     ("Como preencher (células amarelas):", True, CINZA),
     ("•  Tag / Equipamento: a tag real de cada peça.   •  Tipo: escolha na lista.   •  MCC: de onde vem a produção (2, 3 ou 4).", False, CINZA),
     ("•  Meta: vida útil daquela tag.   •  Desde: data de instalação.   •  Acumulado inicial: o que já tinha até o dia anterior a 'Desde'.", False, CINZA),
     ("Molde: automático pelo relatório (corridas do veio G ou H). Oscilador conta dias; componentes somam as toneladas da MCC desde 'Desde'.", False, CINZA),
     ("ATENÇÃO: metas padrão por tipo e 'Desde = 01/08/2026' são PROVISÓRIOS. Substitua pelos valores reais de cada tag.", True, VERMELHO_ESC),
-    ("Trocou um equipamento? Registre a saída na aba TrocasEquip, depois digite a nova data em 'Desde' e zere o 'Acumulado inicial'.", False, CINZA),
+    ("Trocou uma peça? 1) TrocasEquip: data, tag que saiu e motivo (o resto é automático). 2) NÃO apague a linha dela aqui (vira 'Saiu'). 3) Cadastre a peça nova numa linha vazia.", False, CINZA),
 ]
 for n_, (txt, negrito, cor) in enumerate(notas):
     c = eq.cell(EQ_ULT + 3 + n_, 1, txt)
@@ -336,17 +348,24 @@ ml.sheet_properties.tabColor = AZUL
 # Abas manuais
 # =====================================================================
 te = wb.create_sheet("TrocasEquip")
-cabecalho(te, ["Data da saída", "Equipamento", "Acumulado na saída", "Unidade", "Motivo", "Observação"], cor=OURO)
+cabecalho(te, ["Data da saída", "Tag que saiu", "Acumulado na saída", "Unidade", "Motivo", "Observação",
+               "Posição", "Veio", "% da vida na saída"], cor=OURO)
 for r in range(2, ULTIMA + 1):
+    linha_eq = f'MATCH(1,INDEX(({EQ("A")}=B{r})*({EQ("P")}=A{r}),0),0)'
+    te[f"C{r}"] = (f'=IF(OR(A{r}="",B{r}=""),"",IF(COUNTIF({EQ("A")},B{r})=0,"tag não encontrada",'
+                   f'IFERROR(INDEX({EQ("H")},{linha_eq}),"confira a data")))')
+    te[f"D{r}"] = f'=IF(B{r}="","",IFERROR(INDEX({EQ("C")},MATCH(B{r},{EQ("A")},0)),""))'
+    te[f"G{r}"] = f'=IF(B{r}="","",IFERROR(INDEX({EQ("N")},MATCH(B{r},{EQ("A")},0)),""))'
+    te[f"H{r}"] = f'=IF(B{r}="","",IFERROR(INDEX({EQ("L")},MATCH(B{r},{EQ("A")},0)),""))'
+    te[f"I{r}"] = f'=IF(OR(A{r}="",B{r}=""),"",IFERROR(INDEX({EQ("J")},{linha_eq}),""))'
     te[f"A{r}"].number_format = "dd/mm/yyyy"
     te[f"C{r}"].number_format = "#,##0"
-preencher(te, f"A2:F{ULTIMA}", AMARELO)
-larguras(te, {"A": 15, "B": 22, "C": 20, "D": 10, "E": 45, "F": 40})
+    te[f"I{r}"].number_format = "0.0%"
+preencher(te, f"A2:B{ULTIMA}", AMARELO)
+preencher(te, f"E2:F{ULTIMA}", AMARELO)
+larguras(te, {"A": 15, "B": 16, "C": 20, "D": 10, "E": 40, "F": 35, "G": 17, "H": 7, "I": 17})
 dv = DataValidation(type="list", formula1=f"={EQ('A')}", allow_blank=True)
 dv.add(f"B2:B{ULTIMA}")
-te.add_data_validation(dv)
-dv = DataValidation(type="list", formula1='"t,corridas,dias"', allow_blank=True)
-dv.add(f"D2:D{ULTIMA}")
 te.add_data_validation(dv)
 validacao_data(te, f"A2:A{ULTIMA}")
 te.sheet_properties.tabColor = OURO
@@ -451,6 +470,9 @@ for n in range(1, TOP + 1):
     ax[f"F{n + 1}"] = (
         f"=IFERROR(IF(LARGE({EQ('M')},{n})<0,0,MATCH(LARGE({EQ('M')},{n}),{EQ('M')},0)),0)"
     )
+for k in range(1, N + 7):
+    ax[f"H{k + 1}"] = f"=IFERROR(SMALL({EQ('Q')},{k}),0)"
+ax["H1"] = "Linha ativa"
 ax.sheet_state = "hidden"
 
 # =====================================================================
@@ -480,7 +502,7 @@ pn["A3"].alignment = ESQ
 # Indicadores
 EQK = EQ("K")
 kpis = [
-    ("A", "A", "Equipamentos", f"=COUNTA({EQ('A')})", AZUL_CLARO, NAVY),
+    ("A", "A", "Equipamentos", f"=COUNT({EQ('Q')})", AZUL_CLARO, NAVY),
     ("B", "C", "Além da meta", f'=COUNTIF({EQK},"Além da meta")', VERMELHO, "9C0006"),
     ("D", "E", "Atenção", f'=COUNTIF({EQK},"Atenção")', AMBAR, "9C5700"),
     ("F", "G", "OK", f'=COUNTIF({EQK},"OK")', VERDE, "006100"),
@@ -518,7 +540,7 @@ cores_situacao(pn, f"D10:D{9 + TOP}")
 for n, tipo in enumerate(TIPOS):
     r = 10 + n
     pn.cell(r, 6, tipo)
-    pn.cell(r, 7, f'=COUNTIF({EQ("B")},F{r})')
+    pn.cell(r, 7, f'=COUNTIFS({EQ("B")},F{r},{EQK},"<>Saiu")')
     pn.cell(r, 8, f'=IF(G{r}=0,"",SUMPRODUCT(MAX(({EQ("B")}=F{r})*{EQ("M")})))')
     pn.cell(r, 9, f'=COUNTIFS({EQ("B")},F{r},{EQK},"Atenção")+COUNTIFS({EQ("B")},F{r},{EQK},"Além da meta")')
     pn.cell(r, 8).number_format = "0.0%"
@@ -531,16 +553,16 @@ pn.conditional_formatting.add(f"I10:I{9 + len(TIPOS)}", CellIsRule(operator="gre
 
 # Todos os equipamentos
 T0 = 19  # linha do título da seção
-PN = N + 3
+PN = N + 6
 titulo_secao(pn, f"A{T0}:I{T0}", "Todos os equipamentos")
 cab_linha(pn, T0 + 1, 1, ["Tag", "Posição", "Veio", "Meta", "Acumulado", "Falta", "% da vida", "Situação", "Desde"])
 origem = {1: "A", 2: "N", 3: "L", 4: "E", 5: "H", 6: "I", 7: "J", 8: "K", 9: "F"}
 for k in range(PN):
     r = T0 + 2 + k
     for j, col in origem.items():
-        ref = f"Equipamentos!{col}{k + 2}"
-        vazio = f'Equipamentos!A{k + 2}=""'
-        f = f'=IF(OR({vazio},{ref}=""),"",{ref})' if j == 9 else f'=IF({vazio},"",{ref})'
+        idx = f"Auxiliar!$H${k + 2}"
+        ref = f"INDEX(Equipamentos!${col}:${col},{idx})"
+        f = f'=IF({idx}=0,"",IF({ref}="","",{ref}))'
         c = pn.cell(r, j, f)
         c.border = BORDA
         c.alignment = ESQ if j == 1 else CENTRO if j in (2, 3, 8, 9) else DIR
@@ -618,7 +640,7 @@ abas = [
     ("Painel", "Visão geral: indicadores, mais desgastados, resumo por tipo, todos os equipamentos e gráficos.", NAVY),
     ("Equipamentos", "Cadastro de cada tag (meta, MCC, Desde, acumulado inicial) e o cálculo da vida.", AZUL),
     ("Moldes", "Todos os veios (C a H) pelo relatório: molde atual, corridas, trocas, dias parados.", AZUL),
-    ("TrocasEquip", "Você registra a saída de oscilador e componentes.", OURO),
+    ("TrocasEquip", "Você digita data, tag que saiu e motivo; acumulado, unidade e % da vida são automáticos.", OURO),
     ("Paradas", "Você registra paradas (início, fim, motivo).", OURO),
     ("Historico", "Robô: corridas de cada veio por dia.", CINZA),
     ("Producao", "Robô: toneladas reais por MCC por dia.", CINZA),
@@ -651,7 +673,9 @@ passos = [
     ]),
     ("Quando trocar", [
         "Molde: nada a fazer, o robô detecta a troca pelo relatório.",
-        "Oscilador ou componente: registre a saída em TrocasEquip, depois na aba Equipamentos digite a nova data em Desde e zere o Acumulado inicial.",
+        "Oscilador ou componente, passo 1: na aba TrocasEquip digite Data da saída, Tag que saiu e Motivo. Acumulado, unidade, posição e % da vida aparecem sozinhos.",
+        "Passo 2: na aba Equipamentos, NÃO apague a linha da peça que saiu (ela fica cinza como 'Saiu' e guarda o histórico).",
+        "Passo 3: na primeira linha vazia da aba Equipamentos, cadastre a peça nova: Tag, Tipo, MCC, Meta, Desde (data em que entrou), Acumulado inicial (0 se nova), Veio e Posição.",
     ]),
     ("Cores", [
         "Amarelo = você digita.   Verde = OK.   Âmbar = atenção (a partir do limiar em Regras).   Vermelho = além da meta ou alerta aberto.",

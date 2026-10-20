@@ -61,12 +61,15 @@ O robo pega tambem os e-mails dos dias que voce nao rodou (fim de semana etc.).
 ==================================================================
 MOLDE: nao faca nada. O robo ve a troca pelo relatorio e registra na aba Trocas.
 OSCILADOR, BENDER, BOW, R1, R2, HORIZONTAL:
-1. Aba TrocasEquip: anote data, tag que saiu, acumulado na saida, motivo.
-2. Aba Equipamentos, na linha da posicao:
-   - Tag = tag da peca nova;
-   - Desde = data em que entrou;
-   - Acumulado inicial = 0 (ou o que ela ja tinha, se for peca recuperada);
-   - Meta = meta da peca nova.
+1. Aba TrocasEquip: digite SO a Data da saida, a Tag que saiu e o Motivo.
+   Acumulado na saida, Unidade, Posicao, Veio e % da vida aparecem sozinhos
+   (o acumulado congela na data da saida).
+2. Aba Equipamentos: NAO apague a linha da peca que saiu. Ela fica cinza
+   como "Saiu", sai do Painel e guarda o historico.
+3. Na primeira linha vazia da aba Equipamentos, cadastre a peca nova:
+   Tag, Tipo, MCC (4), Meta, Desde (data em que entrou), Acumulado inicial
+   (0 se nova, ou o que ja tinha se for recuperada), Veio e Posicao.
+   Ela aparece no Painel no lugar da que saiu.
 
 PARADAS: aba Paradas (inicio, fim, veio, motivo) - so para registro.
 
