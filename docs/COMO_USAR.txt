@@ -75,6 +75,13 @@ NAO precisa mexer na aba Equipamentos.
 PARADAS: aba Paradas (inicio, fim, veio, motivo) - so para registro.
 
 ==================================================================
+TONELADA POR VEIO
+==================================================================
+A tonelada do relatorio (CORTESEQ) e da MAQUINA (MCC4 = veios G + H).
+Cada peca recebe a tonelada dividida por 2 (aba Regras, celula B4 = 2).
+Ex.: o MCC4 fez 1.000 t no dia -> cada peca do veio G e do veio H soma 500 t.
+
+==================================================================
 6A. O QUE O ROBO FAZ SOZINHO A CADA RODADA (ROBO GRAVANDO)
 ==================================================================
 - BACKUP: antes de gravar, copia a planilha para C:\Controle\backup\

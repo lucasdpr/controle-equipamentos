@@ -258,7 +258,7 @@ for i in range(2, EQ_ULT + 1):
         f'N(G{i})+IF(F{i}="",0,IF(C{i}="dias",MAX(0,TODAY()-F{i}),'
         f'IF(D{i}=2,SUMIFS(Producao!$D:$D,Producao!$A:$A,">="&F{i}),'
         f'IF(D{i}=3,SUMIFS(Producao!$E:$E,Producao!$A:$A,">="&F{i}),'
-        f'SUMIFS(Producao!$B:$B,Producao!$A:$A,">="&F{i})))))))'
+        f'SUMIFS(Producao!$B:$B,Producao!$A:$A,">="&F{i})))/Regras!$B$4))))'
     )
     eq[f"I{i}"] = f'=IF(OR(A{i}="",E{i}=""),"",E{i}-H{i})'
     eq[f"J{i}"] = f'=IF(OR(A{i}="",N(E{i})<=0),"",H{i}/E{i})'
@@ -372,7 +372,7 @@ for r in range(2, ULTIMA + 1):
     ate = f'Producao!$A:$A,">="&O{r},Producao!$A:$A,"<"&A{r}'
     te[f"D{r}"] = (f'=IF(OR(A{r}="",N{r}=""),"",P{r}+IF(E{r}="dias",MAX(0,A{r}-O{r}),'
                    f'IF({mcc}=2,SUMIFS(Producao!$D:$D,{ate}),IF({mcc}=3,SUMIFS(Producao!$E:$E,{ate}),'
-                   f'SUMIFS(Producao!$B:$B,{ate})))))')
+                   f'SUMIFS(Producao!$B:$B,{ate})))/Regras!$B$4))')
     te[f"F{r}"] = f'=IF(OR(D{r}="",N(Q{r})<=0),"",D{r}/Q{r})'
     te[f"R{r}"] = f'=IF(N{r}="","",INDEX({EQ("B")},N{r}))'
     te[f"A{r}"].number_format = "dd/mm/yyyy"
@@ -484,6 +484,9 @@ rg = wb.create_sheet("Regras")
 rg.sheet_view.showGridLines = False
 cab_linha(rg, 1, 1, ["Parâmetro", "Valor"])
 rg["A3"], rg["B3"] = "Limiar de atenção (% da vida)", 0.8
+rg["A4"], rg["B4"] = "Veios por máquina (a tonelada do relatório é da máquina e é dividida entre os veios)", 2
+rg["B4"].fill = PatternFill("solid", fgColor=AMARELO)
+rg["B4"].border = BORDA
 rg["B3"].number_format = "0%"
 rg["B3"].fill = PatternFill("solid", fgColor=AMARELO)
 rg["B3"].border = BORDA
@@ -493,7 +496,7 @@ textos = [
     "Molde (corridas): acumulado do último dia em Historico, pelo veio. Um registro por data e veio; reenvio do mesmo dia substitui, não soma.",
     "Troca de molde: quando o nº do molde do veio muda, o robô registra em Trocas (molde que saiu, corridas na saída pela observação do relatório, molde que entrou).",
     "Oscilador (dias): dias corridos desde 'Desde' + Acumulado inicial.",
-    "Componentes (t): toneladas reais da MCC escolhida (aba Producao) desde 'Desde' + Acumulado inicial.",
+    "Componentes (t): toneladas reais da MCC escolhida (aba Producao) desde 'Desde', DIVIDIDAS pelos veios da máquina (Regras B4 = 2: cada veio fez metade), + Acumulado inicial.",
     "Falta = meta − acumulado.   % = acumulado ÷ meta.   Acima de 100% = além da meta.   Sem previsão de data de troca.",
     "Alertas: acumulado diminuiu sem troca; veio não andou enquanto a MCC produziu; layout dos anexos mudou; troca para conferir.",
     "Cores das abas: azul = painel e cadastros; dourado = você digita; cinza = o robô preenche; vermelho = alertas.",
